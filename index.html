@@ -46,7 +46,7 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 h3{font-size:18px;font-weight:700;margin-bottom:5px}
 .sub{color:var(--muted);font-size:13px;margin-bottom:1.5rem}
 label{display:block;font-size:12px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;font-weight:500}
-input[type=text],input[type=password],input[type=tel],select,textarea{
+input[type=text],input[type=password],input[type=tel],input[type=number],select,textarea{
   width:100%;background:var(--surface2);border:1.5px solid var(--border2);border-radius:var(--radius-sm);
   padding:11px 14px;color:var(--text);font-family:var(--font);font-size:15px;outline:none;
   transition:all .2s;margin-bottom:1rem}
@@ -314,6 +314,14 @@ select option{background:var(--surface)}
   </div>
 </div>
 
+<div class="modal-overlay" id="edit-kpi-modal">
+  <div class="modal" style="position:relative">
+    <div class="modal-handle"></div>
+    <button class="close-modal" onclick="document.getElementById('edit-kpi-modal').classList.remove('open')">✕</button>
+    <div id="edit-kpi-modal-content"></div>
+  </div>
+</div>
+
 <div class="modal-overlay" id="phone-modal">
   <div class="modal" style="position:relative">
     <div class="modal-handle"></div>
@@ -357,7 +365,7 @@ function statInline(lbl, val, col='text') {
 }
 
 function kpiCard(lbl, val, max) {
-  const pct = Math.min(100, (val/max)*100);
+  const pct = Math.min(100, Math.max(0, (val/max)*100)); // Ensure it doesn't break if below 0
   const col = pct>80 ? 'var(--green)' : pct>50 ? 'var(--amber)' : 'var(--red)';
   return `<div class="kpi-card"><div class="kpi-label">${lbl}</div><div style="font-size:20px;font-weight:700;color:${col}">${val} <span style="font-size:12px;color:var(--muted)">/ ${max}</span></div><div class="kpi-bar"><div class="kpi-bar-fill" style="width:${pct}%;background:${col}"></div></div></div>`;
 }
@@ -383,6 +391,7 @@ function closeLightbox() {
 const WA_NOTIFY = '+60187811293';
 let db, storage, firebaseReady = false;
 
+// 你的专属 Config 已经写死在这里了！
 const firebaseConfig = {
   apiKey: "AIzaSyB5p2x1uUiAUrhPYzsBR7Be-aadcV1fM9M",
   authDomain: "lorrytrack-d8aec.firebaseapp.com",
@@ -423,14 +432,14 @@ async function seedInitialData() {
   if (!snap.empty) return;
   const batch = db.batch();
   const defaultDrivers = [
-    {id:'jong',name:'Jong',role:'Driver',lorry:'JUF-01',partner:'Namye',phone:'',password:'jong123'},
-    {id:'anne',name:'Anne',role:'Driver',lorry:'ALY-01',partner:'',phone:'',password:'anne123'},
-    {id:'khairil',name:'Khairil',role:'Driver',lorry:'JUB-01',partner:'',phone:'',password:'khairil123'},
-    {id:'shukri',name:'Shukri',role:'Driver',lorry:'SYS-01',partner:'',phone:'',password:'shukri123'},
-    {id:'grace',name:'Grace',role:'Driver',lorry:'JNE-01',partner:'Namye',phone:'',password:'grace123'},
-    {id:'karen',name:'Karen',role:'Driver',lorry:'JTU-01',partner:'',phone:'',password:'karen123'},
-    {id:'walhub',name:'Walhub',role:'Kelindan',lorry:'JNE-01',partner:'',phone:'',password:'walhub123'},
-    {id:'namye',name:'Namye',role:'Kelindan',lorry:'JUF-01',partner:'',phone:'',password:'namye123'},
+    {id:'jong',name:'Jong',role:'Driver',lorry:'JUF-01',partner:'Namye',phone:'',password:'jong123', manualPoints:0},
+    {id:'anne',name:'Anne',role:'Driver',lorry:'ALY-01',partner:'',phone:'',password:'anne123', manualPoints:0},
+    {id:'khairil',name:'Khairil',role:'Driver',lorry:'JUB-01',partner:'',phone:'',password:'khairil123', manualPoints:0},
+    {id:'shukri',name:'Shukri',role:'Driver',lorry:'SYS-01',partner:'',phone:'',password:'shukri123', manualPoints:0},
+    {id:'grace',name:'Grace',role:'Driver',lorry:'JNE-01',partner:'Namye',phone:'',password:'grace123', manualPoints:0},
+    {id:'karen',name:'Karen',role:'Driver',lorry:'JTU-01',partner:'',phone:'',password:'karen123', manualPoints:0},
+    {id:'walhub',name:'Walhub',role:'Kelindan',lorry:'JNE-01',partner:'',phone:'',password:'walhub123', manualPoints:0},
+    {id:'namye',name:'Namye',role:'Kelindan',lorry:'JUF-01',partner:'',phone:'',password:'namye123', manualPoints:0},
   ];
   defaultDrivers.forEach(d=>{ batch.set(db.collection('drivers').doc(d.id), d); });
   
@@ -643,23 +652,35 @@ function renderDriverKPI() {
   const sScore=Math.max(0,sMax-undelivered*10);
   const atScore=Math.max(0,atMax-complaints*50);
   const iScore=iMax;
-  const total_score=aScore+sScore+atScore+iScore;
-  const maxScore=1100;
+  
+  // 新增：提取司机专属的手动加分/扣分
+  const manualPoints = currentUser.manualPoints || 0;
+  
+  // 将 manualPoints 加进总分
+  const total_score = aScore + sScore + atScore + iScore + manualPoints;
+  const maxScore = currentUser.role === 'Driver' ? 1100 : 660; // 根据身份定满分
+
   return `
   <div class="section-hdr">My KPI Score</div>
   <div class="card highlight" style="text-align:center;padding:1.75rem">
     <div style="font-size:52px;font-weight:700;letter-spacing:-2px;color:${total_score>800?'var(--green)':total_score>500?'var(--amber)':'var(--red)'}">${total_score}</div>
     <div style="color:var(--muted);font-size:13px;font-weight:500">out of ${maxScore} points</div>
-    <div class="kpi-bar" style="margin-top:14px"><div class="kpi-bar-fill" style="width:${(total_score/maxScore*100).toFixed(0)}%;background:${total_score>800?'var(--green)':total_score>500?'var(--amber)':'var(--red)'}"></div></div>
+    <div class="kpi-bar" style="margin-top:14px"><div class="kpi-bar-fill" style="width:${Math.min(100, Math.max(0, (total_score/maxScore*100))).toFixed(0)}%;background:${total_score>800?'var(--green)':total_score>500?'var(--amber)':'var(--red)'}"></div></div>
   </div>
   <div class="kpi-grid">
     ${kpiCard('Attendance',aScore,aMax)}${kpiCard('Shop Delivery',sScore,sMax)}
     ${kpiCard('Attitude',atScore,atMax)}${kpiCard('Image',iScore,iMax)}
   </div>
-  <div class="section-hdr">Trip Stats</div>
+  <div class="section-hdr">Trip Stats & Adjustments</div>
   <div class="card">
-    ${statRow('Total Trips',total)}${statRow('Delivered',delivered,'green')}
-    ${statRow('Not Delivered',undelivered,'red')}${statRow('Complaints',complaints,complaints>0?'red':'green')}
+    ${statRow('Total Trips',total)}
+    ${statRow('Delivered',delivered,'green')}
+    ${statRow('Not Delivered',undelivered,'red')}
+    ${statRow('Complaints',complaints,complaints>0?'red':'green')}
+    <div style="display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid var(--border);margin-top:4px;font-size:13px">
+      <span style="color:var(--text);font-weight:600">Admin Adjustments</span>
+      <strong style="color:${manualPoints>=0?'var(--green)':'var(--red)'}">${manualPoints > 0 ? '+'+manualPoints : manualPoints} pts</strong>
+    </div>
   </div>`;
 }
 
@@ -848,7 +869,7 @@ async function requestReschedule(tripId) {
 // Google Drive 专用上传通道 (Google Apps Script)
 // ============================================================
 async function uploadPhoto(dataUrl, trip) {
-  // 你的专属 Google Apps Script URL
+  // 👇 这里是你的 Google Drive 链接
   const GAS_URL = "https://script.google.com/macros/s/AKfycbwN4XBXXLlNgOJARUJsayXHJsqIhcC02bvVzPfwdq3TddrAC4_6LO8v68QOuW7mNxUS/exec"; 
   
   const filename = `${trip.id}_${Date.now()}.jpg`;
@@ -1041,9 +1062,15 @@ function renderAdminDrivers() {
     const delivered=trips.filter(t=>t.status==='delivered').length;
     const undelivered=trips.filter(t=>t.status==='undelivered').length;
     const complaints=trips.reduce((a,t)=>a+(t.comments||[]).filter(c=>c.type==='Customer Complaint').length,0);
+    
+    // NEW: 读取 Admin 手动加减的分数，默认 0
+    const manualPoints = d.manualPoints || 0;
+
     const maxScore=d.role==='Driver'?1100:660;
-    const score=Math.max(0,maxScore-undelivered*50-complaints*50);
-    const pct=Math.min(100,(score/maxScore*100)).toFixed(0);
+    // 总分 = 自动计算满分 - 扣除项 + Admin手动调整分
+    const score=Math.max(0, maxScore - undelivered*50 - complaints*50) + manualPoints;
+    const pct=Math.min(100, Math.max(0, (score/maxScore*100))).toFixed(0);
+
     html+=`<div class="card" style="margin-bottom:10px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
         <div style="display:flex;align-items:center;gap:10px">
@@ -1056,12 +1083,75 @@ function renderAdminDrivers() {
         <span class="badge ${score>800?'green':score>500?'amber':'red'}">${score} pts</span>
       </div>
       <div class="kpi-bar"><div class="kpi-bar-fill" style="width:${pct}%;background:${score>800?'var(--green)':score>500?'var(--amber)':'var(--red)'}"></div></div>
-      <div style="margin-top:10px;text-align:right">
-        <button class="btn danger small" onclick="removeDriver('${d.id}')">Remove Driver</button>
+      <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center">
+        <span style="font-size:12px;color:var(--muted)">Adjustments: <strong style="color:${manualPoints>=0?'var(--green)':'var(--red)'}">${manualPoints}</strong></span>
+        <div>
+          <button class="btn amber-btn small" onclick="openEditKPI('${d.id}')">📊 Edit KPI</button>
+          <button class="btn danger small" onclick="removeDriver('${d.id}')">Remove</button>
+        </div>
       </div>
     </div>`;
   });
   return html;
+}
+
+// ============================================================
+// EDIT KPI (Admin)
+// ============================================================
+function openEditKPI(driverId) {
+  const d = allDrivers.find(x => x.id === driverId);
+  const currentManual = d.manualPoints || 0;
+  document.getElementById('edit-kpi-modal-content').innerHTML = `
+    <div class="modal-title">📊 Edit KPI: ${d.name}</div>
+    <div class="modal-sub">Manually add or deduct points (e.g., 50 for bonus, -20 for penalty).</div>
+    
+    <div style="margin-bottom:14px;font-size:13px;background:var(--surface2);padding:10px;border-radius:8px">
+      Current Manual Adjustments: <strong style="color:var(--accent)">${currentManual > 0 ? '+'+currentManual : currentManual} pts</strong>
+    </div>
+
+    <label>Add / Deduct Points (Number)</label>
+    <input type="number" id="kpi-adj-val" placeholder="e.g. 50 or -30"/>
+    
+    <label>Reason (Optional)</label>
+    <input type="text" id="kpi-adj-reason" placeholder="e.g. Extra trip bonus / Late penalty"/>
+    
+    <button class="btn" onclick="saveKPIAdjustment('${d.id}')">Save Adjustment</button>`;
+  
+  document.getElementById('edit-kpi-modal').classList.add('open');
+}
+
+async function saveKPIAdjustment(driverId) {
+  const val = parseInt(document.getElementById('kpi-adj-val').value) || 0;
+  if(val === 0) { 
+    showToast('Enter a valid number', 'error'); 
+    return; 
+  }
+  
+  const btn = event.target; 
+  btn.disabled = true; 
+  btn.textContent = 'Saving...';
+  
+  try {
+    const d = allDrivers.find(x => x.id === driverId);
+    // 叠加分数 (原本的分数 + 新输入的分数)
+    const newTotal = (d.manualPoints || 0) + val;
+    
+    // 存入 Firebase
+    await db.collection('drivers').doc(driverId).update({ manualPoints: newTotal });
+    
+    // 更新本地 Array 数据
+    d.manualPoints = newTotal;
+    
+    document.getElementById('edit-kpi-modal').classList.remove('open');
+    showToast(`✅ KPI adjusted by ${val > 0 ? '+'+val : val} points!`, 'success');
+    
+    // 刷新页面
+    adminTab('drivers');
+  } catch(e) {
+    showToast('Error: ' + e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = 'Save Adjustment';
+  }
 }
 
 // ============================================================
@@ -1112,7 +1202,7 @@ async function saveNewDriver() {
       btn.textContent = 'Save Driver';
       return;
     }
-    const newDriver = { id, name, role, lorry, partner: '', phone: '', password };
+    const newDriver = { id, name, role, lorry, partner: '', phone: '', password, manualPoints: 0 };
     await db.collection('drivers').doc(id).set(newDriver);
     allDrivers.push(newDriver);
 
