@@ -433,6 +433,14 @@ async function initFirebase() {
   }
   try {
     if (!firebase.apps.length) firebase.initializeApp(cfg);
+    
+    // 开启本地缓存，提升载入速度与离线体验
+    try {
+      await firebase.firestore().enablePersistence();
+    } catch (err) {
+      console.warn("Firebase persistence error:", err.code);
+    }
+
     db = firebase.firestore();
     storage = firebase.storage();
     await db.collection('_ping').doc('test').set({t: Date.now()});
@@ -467,8 +475,8 @@ async function seedInitialData() {
   const today = new Date().toISOString().split('T')[0];
   const tomorrow = new Date(Date.now()+86400000).toISOString().split('T')[0];
   const sampleTrips = [
-    {date:today, driver:'jong', area:'99 Gambang', destination:'Gambang', mapLink:'https://maps.google.com/?q=Gambang', status:'pending', adminApproved:false, createdAt:new Date().toISOString()},
-    {date:today, driver:'anne', area:'1-N9 Negeri Sembilan', destination:'N9 Area', mapLink:'https://maps.google.com/?q=N9', status:'pending', adminApproved:false, createdAt:new Date().toISOString()},
+    {date:today, driver:'jong', area:'99 Gambang', destination:'Gambang', mapLink:'http://googleusercontent.com/maps.google.com/6', status:'pending', adminApproved:false, createdAt:new Date().toISOString()},
+    {date:today, driver:'anne', area:'1-N9 Negeri Sembilan', destination:'N9 Area', mapLink:'http://googleusercontent.com/maps.google.com/7', status:'pending', adminApproved:false, createdAt:new Date().toISOString()},
     {date:tomorrow, driver:'jong', area:'1-Mersing', destination:'Mersing', mapLink:'', status:'pending', adminApproved:false, createdAt:new Date().toISOString()},
   ];
   for(const t of sampleTrips){
@@ -1012,7 +1020,12 @@ async function approveTrip(tripId) {
 }
 
 function renderAdminDrivers() {
-  let html=`<div class="section-hdr">Drivers & KPI</div>`;
+  let html=`
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <div class="section-hdr" style="margin:0">Drivers & KPI</div>
+    <button class="btn small" onclick="openAddDriver()">+ Add Driver</button>
+  </div>`;
+  
   allDrivers.forEach(d=>{
     const trips=allTrips.filter(t=>t.driver===d.id);
     const delivered=trips.filter(t=>t.status==='delivered').length;
@@ -1033,9 +1046,86 @@ function renderAdminDrivers() {
         <span class="badge ${score>800?'green':score>500?'amber':'red'}">${score} pts</span>
       </div>
       <div class="kpi-bar"><div class="kpi-bar-fill" style="width:${pct}%;background:${score>800?'var(--green)':score>500?'var(--amber)':'var(--red)'}"></div></div>
+      <div style="margin-top:10px;text-align:right">
+        <button class="btn danger small" onclick="removeDriver('${d.id}')">Remove Driver</button>
+      </div>
     </div>`;
   });
   return html;
+}
+
+// ============================================================
+// ADD & REMOVE DRIVER (Admin)
+// ============================================================
+function openAddDriver() {
+  document.getElementById('add-driver-modal-content').innerHTML=`
+    <div class="modal-title">👥 Add New Driver</div>
+    <div class="modal-sub">Register a new driver or kelindan</div>
+    <label>Username (ID for login)</label>
+    <input type="text" id="nd-id" placeholder="e.g. ali, muthu... (lowercase)"/>
+    <label>Full Name</label>
+    <input type="text" id="nd-name" placeholder="e.g. Ali Bin Abu"/>
+    <label>Role</label>
+    <select id="nd-role">
+      <option value="Driver">Driver</option>
+      <option value="Kelindan">Kelindan</option>
+    </select>
+    <label>Lorry Plate (Optional)</label>
+    <input type="text" id="nd-lorry" placeholder="e.g. JUF-01"/>
+    <label>Password</label>
+    <input type="text" id="nd-pass" placeholder="e.g. ali123"/>
+    <button class="btn" onclick="saveNewDriver()">Save Driver</button>`;
+  document.getElementById('add-driver-modal').classList.add('open');
+}
+
+async function saveNewDriver() {
+  const id = document.getElementById('nd-id').value.trim().toLowerCase();
+  const name = document.getElementById('nd-name').value.trim();
+  const role = document.getElementById('nd-role').value;
+  const lorry = document.getElementById('nd-lorry').value.trim();
+  const password = document.getElementById('nd-pass').value.trim();
+
+  if(!id || !name || !password){ 
+    showToast('Fill required fields (Username, Name, Password)', 'error'); 
+    return; 
+  }
+
+  const btn = event.target; 
+  btn.disabled = true; 
+  btn.textContent = 'Saving...';
+
+  try {
+    const snap = await db.collection('drivers').doc(id).get();
+    if(snap.exists) {
+      showToast('Username already exists! Please choose another.', 'error');
+      btn.disabled = false;
+      btn.textContent = 'Save Driver';
+      return;
+    }
+    const newDriver = { id, name, role, lorry, partner: '', phone: '', password };
+    await db.collection('drivers').doc(id).set(newDriver);
+    allDrivers.push(newDriver);
+
+    document.getElementById('add-driver-modal').classList.remove('open');
+    showToast('✅ New driver added successfully!', 'success');
+    adminTab('drivers');
+  } catch(e) {
+    showToast('Error: ' + e.message, 'error');
+    btn.disabled = false;
+    btn.textContent = 'Save Driver';
+  }
+}
+
+async function removeDriver(id) {
+  if(!confirm('Are you sure you want to completely remove this driver?')) return;
+  try {
+    await db.collection('drivers').doc(id).delete();
+    allDrivers = allDrivers.filter(d => d.id !== id);
+    showToast('✅ Driver removed successfully', 'success');
+    adminTab('drivers');
+  } catch(e) { 
+    showToast('Error removing driver: ' + e.message, 'error'); 
+  }
 }
 
 // ============================================================
