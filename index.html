@@ -736,13 +736,39 @@ function renderDeliveryModal(trip) {
     ${photoHtml}${actionHtml}${commHtml}`;
 }
 
+// 自动压缩照片功能，提升上传速度并节省空间
 function handlePhotoUpload(e) {
-  const file=e.target.files[0]; if(!file) return;
-  const reader=new FileReader();
-  reader.onload=ev=>{
-    uploadedPhotoData=ev.target.result;
-    const trip=allTrips.find(t=>t.id===currentTripId);
-    renderDeliveryModal(trip);
+  const file = e.target.files[0]; 
+  if (!file) return;
+  
+  const reader = new FileReader();
+  reader.onload = ev => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement('canvas');
+      let w = img.width, h = img.height;
+      const MAX_SIZE = 800; // 将最长边限制在 800px 以内
+      
+      if (w > h && w > MAX_SIZE) { 
+        h = Math.round(h * MAX_SIZE / w); 
+        w = MAX_SIZE; 
+      } else if (h > MAX_SIZE) { 
+        w = Math.round(w * MAX_SIZE / h); 
+        h = MAX_SIZE; 
+      }
+      
+      canvas.width = w; 
+      canvas.height = h;
+      const ctx = canvas.getContext('2d');
+      ctx.drawImage(img, 0, 0, w, h);
+      
+      // 压缩成 JPEG 格式，质量设为 0.7（画质够用且体积非常小）
+      uploadedPhotoData = canvas.toDataURL('image/jpeg', 0.7);
+      
+      const trip = allTrips.find(t => t.id === currentTripId);
+      renderDeliveryModal(trip);
+    };
+    img.src = ev.target.result;
   };
   reader.readAsDataURL(file);
 }
