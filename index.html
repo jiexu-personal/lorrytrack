@@ -383,7 +383,6 @@ function closeLightbox() {
 const WA_NOTIFY = '+60187811293';
 let db, storage, firebaseReady = false;
 
-// 你的专属 Config 已经写死在这里了！
 const firebaseConfig = {
   apiKey: "AIzaSyB5p2x1uUiAUrhPYzsBR7Be-aadcV1fM9M",
   authDomain: "lorrytrack-d8aec.firebaseapp.com",
@@ -736,7 +735,7 @@ function renderDeliveryModal(trip) {
     ${photoHtml}${actionHtml}${commHtml}`;
 }
 
-// 自动压缩照片功能，提升上传速度并节省空间
+// 自动压缩照片功能，实现“秒传”且极度省空间
 function handlePhotoUpload(e) {
   const file = e.target.files[0]; 
   if (!file) return;
@@ -762,7 +761,7 @@ function handlePhotoUpload(e) {
       const ctx = canvas.getContext('2d');
       ctx.drawImage(img, 0, 0, w, h);
       
-      // 压缩成 JPEG 格式，质量设为 0.7（画质够用且体积非常小）
+      // 压缩成 JPEG 格式，质量设为 0.7
       uploadedPhotoData = canvas.toDataURL('image/jpeg', 0.7);
       
       const trip = allTrips.find(t => t.id === currentTripId);
@@ -773,15 +772,19 @@ function handlePhotoUpload(e) {
   reader.readAsDataURL(file);
 }
 
+// 提交已送达，并将完整 trip 资料传给 Google Drive
 async function confirmDelivered() {
   if(!uploadedPhotoData){showToast('Upload delivery photo first','error');return;}
   const btn=event.target; btn.disabled=true; btn.textContent='Saving...';
   try{
-    const photoURL=await uploadPhoto(uploadedPhotoData, currentTripId);
+    const trip = allTrips.find(t => t.id === currentTripId); 
+    const photoURL = await uploadPhoto(uploadedPhotoData, trip); 
+    if (!photoURL) throw new Error("Photo upload returned null");
+
     const update={status:'delivered',photos:firebase.firestore.FieldValue.arrayUnion(photoURL),deliveredAt:new Date().toISOString(), adminApproved:false};
     await db.collection('trips').doc(currentTripId).update(update);
-    const trip=allTrips.find(t=>t.id===currentTripId);
     Object.assign(trip,{status:'delivered',photos:[...(trip.photos||[]),photoURL],deliveredAt:update.deliveredAt, adminApproved:false});
+    
     uploadedPhotoData=null;
     closeDeliveryModal();
     showToast('✅ Delivery confirmed!','success');
@@ -811,16 +814,20 @@ function selectReason(r,el){
   el.classList.add('selected');
 }
 
+// 提交未送达，并将完整 trip 资料传给 Google Drive
 async function confirmUndelivered() {
   if(!selectedReason){showToast('Select a reason','error');return;}
   const btn=event.target; btn.disabled=true; btn.textContent='Saving...';
   try{
-    const photoURL=await uploadPhoto(uploadedPhotoData, currentTripId);
+    const trip = allTrips.find(t => t.id === currentTripId); 
+    const photoURL = await uploadPhoto(uploadedPhotoData, trip); 
+    if (!photoURL) throw new Error("Photo upload returned null");
+
     const notes=document.getElementById('reason-notes').value;
     const update={status:'undelivered',undeliveredReason:selectedReason,notes,photos:firebase.firestore.FieldValue.arrayUnion(photoURL),rescheduleRequested:false, adminApproved:false};
     await db.collection('trips').doc(currentTripId).update(update);
-    const trip=allTrips.find(t=>t.id===currentTripId);
     Object.assign(trip,{status:'undelivered',undeliveredReason:selectedReason,notes,photos:[...(trip.photos||[]),photoURL],rescheduleRequested:false, adminApproved:false});
+    
     uploadedPhotoData=null; selectedReason='';
     closeDeliveryModal();
     showToast('Marked as not delivered','error');
@@ -840,29 +847,28 @@ async function requestReschedule(tripId) {
 // ============================================================
 // Google Drive 专用上传通道 (Google Apps Script)
 // ============================================================
-async function uploadPhoto(dataUrl, tripId) {
-  // 👇 把第三步拿到的 Web app URL 贴在这里
+async function uploadPhoto(dataUrl, trip) {
+  // 你的专属 Google Apps Script URL
   const GAS_URL = "https://script.google.com/macros/s/AKfycbwN4XBXXLlNgOJARUJsayXHJsqIhcC02bvVzPfwdq3TddrAC4_6LO8v68QOuW7mNxUS/exec"; 
   
-  const filename = `${tripId}_${Date.now()}.jpg`;
+  const filename = `${trip.id}_${Date.now()}.jpg`;
 
-  // 使用 URLSearchParams 发送，避免跨域报错
   const formData = new URLSearchParams();
   formData.append("fileData", dataUrl);
   formData.append("filename", filename);
+  formData.append("driver", trip.driver); 
+  formData.append("date", trip.date);     
 
   try {
     const res = await fetch(GAS_URL, {
       method: "POST",
       body: formData,
-      headers: {
-        "Content-Type": "application/x-www-form-urlencoded",
-      }
+      headers: { "Content-Type": "application/x-www-form-urlencoded" }
     });
     
     const data = await res.json();
     if (data.success) {
-      return data.url; // 返回 Google Drive 的图片链接
+      return data.url; 
     } else {
       throw new Error(data.error);
     }
@@ -871,15 +877,6 @@ async function uploadPhoto(dataUrl, tripId) {
     showToast("Photo upload failed: " + e.message, "error");
     return null; 
   }
-}
-
-function dataURItoBlob(dataURI){
-  const byteString=atob(dataURI.split(',')[1]);
-  const mimeString=dataURI.split(',')[0].split(':')[1].split(';')[0];
-  const ab=new ArrayBuffer(byteString.length);
-  const ia=new Uint8Array(ab);
-  for(let i=0;i<byteString.length;i++) ia[i]=byteString.charCodeAt(i);
-  return new Blob([ab],{type:mimeString});
 }
 
 function closeDeliveryModal(){
