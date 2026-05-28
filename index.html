@@ -407,32 +407,20 @@ function closeLightbox() {
 const WA_NOTIFY = '+60187811293';
 let db, storage, firebaseReady = false;
 
-function getSavedConfig() {
-  try { return JSON.parse(localStorage.getItem('lorrytrack_fb_config')||'null'); } catch(e){ return null; }
-}
-
-function applyFirebaseConfig() {
-  const raw = document.getElementById('fb-config-input').value.trim();
-  let cfg;
-  try {
-    const match = raw.match(/\{[\s\S]*\}/);
-    cfg = JSON.parse(match ? match[0] : raw);
-  } catch(e) {
-    showToast('Invalid JSON config','error'); return;
-  }
-  localStorage.setItem('lorrytrack_fb_config', JSON.stringify(cfg));
-  location.reload();
-}
+// 🔥 直接把你的 Firebase 配置硬编码在这里
+const firebaseConfig = {
+  apiKey: "AIzaSyB5p2x1uUiAUrhPYzsBR7Be-aadcV1fM9M",
+  authDomain: "lorrytrack-d8aec.firebaseapp.com",
+  projectId: "lorrytrack-d8aec",
+  storageBucket: "lorrytrack-d8aec.firebasestorage.app",
+  messagingSenderId: "529175725884",
+  appId: "1:529175725884:web:b7fbada20d689f4e1c8039"
+};
 
 async function initFirebase() {
-  const cfg = getSavedConfig();
-  if (!cfg) {
-    document.getElementById('app-loading').style.display='none';
-    document.getElementById('fb-config-screen').classList.add('show');
-    return;
-  }
   try {
-    if (!firebase.apps.length) firebase.initializeApp(cfg);
+    // 使用上方写死的 config 初始化
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     
     // 开启本地缓存，提升载入速度与离线体验
     try {
@@ -443,48 +431,27 @@ async function initFirebase() {
 
     db = firebase.firestore();
     storage = firebase.storage();
+    
+    // 测试连接
     await db.collection('_ping').doc('test').set({t: Date.now()});
     firebaseReady = true;
     await seedInitialData();
-    document.getElementById('app-loading').style.display='none';
+    
+    // 关掉加载动画
+    document.getElementById('app-loading').style.display = 'none';
+    
+    // 确保绝对不会显示那个 Firebase Setup 弹窗
+    const setupScreen = document.getElementById('fb-config-screen');
+    if (setupScreen) setupScreen.style.display = 'none'; 
+    
+    // 直接进入登录界面
     showScreen('login');
   } catch(e) {
     console.error(e);
-    document.getElementById('app-loading').style.display='none';
-    document.getElementById('fb-config-screen').classList.add('show');
-    showToast('Firebase connection failed: '+e.message,'error');
+    document.getElementById('app-loading').style.display = 'none';
+    showToast('Firebase connection failed: ' + e.message, 'error');
   }
 }
-
-async function seedInitialData() {
-  const snap = await db.collection('drivers').limit(1).get();
-  if (!snap.empty) return;
-  const batch = db.batch();
-  const defaultDrivers = [
-    {id:'jong',name:'Jong',role:'Driver',lorry:'JUF-01',partner:'Namye',phone:'',password:'jong123'},
-    {id:'anne',name:'Anne',role:'Driver',lorry:'ALY-01',partner:'',phone:'',password:'anne123'},
-    {id:'khairil',name:'Khairil',role:'Driver',lorry:'JUB-01',partner:'',phone:'',password:'khairil123'},
-    {id:'shukri',name:'Shukri',role:'Driver',lorry:'SYS-01',partner:'',phone:'',password:'shukri123'},
-    {id:'grace',name:'Grace',role:'Driver',lorry:'JNE-01',partner:'Namye',phone:'',password:'grace123'},
-    {id:'karen',name:'Karen',role:'Driver',lorry:'JTU-01',partner:'',phone:'',password:'karen123'},
-    {id:'walhub',name:'Walhub',role:'Kelindan',lorry:'JNE-01',partner:'',phone:'',password:'walhub123'},
-    {id:'namye',name:'Namye',role:'Kelindan',lorry:'JUF-01',partner:'',phone:'',password:'namye123'},
-  ];
-  defaultDrivers.forEach(d=>{ batch.set(db.collection('drivers').doc(d.id), d); });
-  
-  const today = new Date().toISOString().split('T')[0];
-  const tomorrow = new Date(Date.now()+86400000).toISOString().split('T')[0];
-  const sampleTrips = [
-    {date:today, driver:'jong', area:'99 Gambang', destination:'Gambang', mapLink:'http://googleusercontent.com/maps.google.com/6', status:'pending', adminApproved:false, createdAt:new Date().toISOString()},
-    {date:today, driver:'anne', area:'1-N9 Negeri Sembilan', destination:'N9 Area', mapLink:'http://googleusercontent.com/maps.google.com/7', status:'pending', adminApproved:false, createdAt:new Date().toISOString()},
-    {date:tomorrow, driver:'jong', area:'1-Mersing', destination:'Mersing', mapLink:'', status:'pending', adminApproved:false, createdAt:new Date().toISOString()},
-  ];
-  for(const t of sampleTrips){
-    batch.set(db.collection('trips').doc('t_'+Date.now()+'_'+Math.random().toString(36).slice(2)), t);
-  }
-  await batch.commit();
-}
-
 // ============================================================
 // AUTH
 // ============================================================
