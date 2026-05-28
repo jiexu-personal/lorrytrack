@@ -1,0 +1,1238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+<title>LorryTrack</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@400;500;600;700&family=DM+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.12.0/firebase-storage-compat.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<style>
+:root {
+  --bg:#f0f4ff;--surface:#fff;--surface2:#f5f7ff;--surface3:#eaedff;
+  --border:rgba(99,102,241,.12);--border2:rgba(99,102,241,.22);
+  --text:#1e1b4b;--muted:#6b7280;--muted2:#9ca3af;
+  --accent:#4f46e5;--accent2:#4338ca;--accent-light:rgba(79,70,229,.1);
+  --green:#059669;--green-bg:rgba(5,150,105,.1);--green-border:rgba(5,150,105,.25);
+  --red:#dc2626;--red-bg:rgba(220,38,38,.08);--red-border:rgba(220,38,38,.25);
+  --amber:#d97706;--amber-bg:rgba(217,119,6,.1);--amber-border:rgba(217,119,6,.25);
+  --purple:#7c3aed;--purple-bg:rgba(124,58,237,.1);
+  --sky:#0284c7;--sky-bg:rgba(2,132,199,.1);
+  --radius:14px;--radius-sm:10px;
+  --font:'Plus Jakarta Sans',sans-serif;--mono:'DM Mono',monospace;
+  --shadow:0 1px 3px rgba(99,102,241,.08),0 4px 16px rgba(99,102,241,.06);
+  --shadow-lg:0 4px 24px rgba(99,102,241,.14);
+}
+*{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent}
+body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:100vh;font-size:15px;-webkit-font-smoothing:antialiased}
+.screen{display:none;min-height:100vh;flex-direction:column}
+.screen.active{display:flex}
+
+/* LOADING */
+#app-loading{position:fixed;inset:0;background:var(--bg);z-index:9999;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:16px}
+.spinner{width:40px;height:40px;border:3px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* FIREBASE CONFIG SCREEN */
+#fb-config-screen{position:fixed;inset:0;background:var(--bg);z-index:8888;display:none;align-items:center;justify-content:center;padding:1.5rem;flex-direction:column}
+#fb-config-screen.show{display:flex}
+.config-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:2rem 1.75rem;width:100%;max-width:500px;box-shadow:var(--shadow-lg)}
+
+/* LOGIN */
+#login{align-items:center;justify-content:center;padding:1.5rem;background:linear-gradient(135deg,#eef2ff 0%,#f0f9ff 50%,#faf5ff 100%)}
+.login-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:2.5rem 1.75rem;width:100%;max-width:380px;box-shadow:var(--shadow-lg)}
+.login-logo{display:flex;align-items:center;gap:12px;margin-bottom:2rem}
+.logo-icon{width:48px;height:48px;background:linear-gradient(135deg,#4f46e5,#7c3aed);border-radius:12px;display:flex;align-items:center;justify-content:center;font-size:24px;box-shadow:0 4px 12px rgba(79,70,229,.3)}
+.logo-text{font-size:22px;font-weight:700;letter-spacing:-.5px}
+.logo-sub{font-size:12px;color:var(--muted);font-family:var(--mono)}
+h3{font-size:18px;font-weight:700;margin-bottom:5px}
+.sub{color:var(--muted);font-size:13px;margin-bottom:1.5rem}
+label{display:block;font-size:12px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.5px;margin-bottom:5px;font-weight:500}
+input[type=text],input[type=password],input[type=tel],select,textarea{
+  width:100%;background:var(--surface2);border:1.5px solid var(--border2);border-radius:var(--radius-sm);
+  padding:11px 14px;color:var(--text);font-family:var(--font);font-size:15px;outline:none;
+  transition:all .2s;margin-bottom:1rem}
+input:focus,select:focus,textarea:focus{border-color:var(--accent);background:#fff;box-shadow:0 0 0 3px rgba(79,70,229,.1)}
+textarea{resize:vertical;min-height:80px}
+select option{background:var(--surface)}
+.btn{width:100%;padding:13px;background:linear-gradient(135deg,#4f46e5,#7c3aed);border:none;border-radius:var(--radius-sm);color:#fff;font-family:var(--font);font-size:15px;font-weight:700;cursor:pointer;transition:all .2s;box-shadow:0 4px 12px rgba(79,70,229,.25)}
+.btn:hover{transform:translateY(-1px);box-shadow:0 6px 18px rgba(79,70,229,.35)}
+.btn:active{transform:translateY(0)}
+.btn.secondary{background:var(--surface2);color:var(--text);border:1.5px solid var(--border2);box-shadow:none}
+.btn.secondary:hover{background:var(--surface3);box-shadow:none;transform:none}
+.btn.danger{background:var(--red-bg);color:var(--red);border:1.5px solid var(--red-border);box-shadow:none}
+.btn.danger:hover{background:rgba(220,38,38,.14);transform:none}
+.btn.success{background:var(--green-bg);color:var(--green);border:1.5px solid var(--green-border);box-shadow:none}
+.btn.success:hover{background:rgba(5,150,105,.15);transform:none}
+.btn.amber-btn{background:var(--amber-bg);color:var(--amber);border:1.5px solid var(--amber-border);box-shadow:none}
+.btn.small{padding:8px 14px;font-size:13px;width:auto;box-shadow:none}
+.btn.small:hover{transform:none}
+.btn:disabled{opacity:.5;cursor:not-allowed;transform:none!important}
+.role-tabs{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:1.5rem;background:var(--surface2);padding:4px;border-radius:var(--radius-sm)}
+.role-tab{padding:10px;border:none;border-radius:8px;background:transparent;color:var(--muted);font-family:var(--font);font-size:14px;font-weight:600;cursor:pointer;transition:all .2s;text-align:center}
+.role-tab.active{background:var(--surface);color:var(--accent);box-shadow:var(--shadow)}
+
+/* TOPBAR */
+.topbar{background:var(--surface);border-bottom:1px solid var(--border);padding:12px 16px;display:flex;align-items:center;justify-content:space-between;position:sticky;top:0;z-index:100;box-shadow:0 1px 8px rgba(99,102,241,.06)}
+.topbar-left{display:flex;align-items:center;gap:10px}
+.topbar-icon{width:34px;height:34px;background:linear-gradient(135deg,#4f46e5,#7c3aed);border-radius:9px;display:flex;align-items:center;justify-content:center;font-size:17px}
+.topbar-title{font-size:16px;font-weight:700;letter-spacing:-.2px}
+.topbar-sub{font-size:11px;color:var(--muted);font-family:var(--mono)}
+.avatar{width:34px;height:34px;border-radius:50%;background:var(--purple-bg);border:2px solid rgba(124,58,237,.2);display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;color:var(--purple);cursor:pointer}
+.avatar.admin-avatar{background:var(--amber-bg);border-color:rgba(217,119,6,.25);color:var(--amber)}
+
+.content{flex:1;overflow-y:auto;padding:16px;padding-bottom:90px}
+
+/* BOTTOM NAV */
+.bottom-nav{position:fixed;bottom:0;left:0;right:0;background:var(--surface);border-top:1px solid var(--border);display:flex;padding:8px 0 calc(8px + env(safe-area-inset-bottom,0px));z-index:100;box-shadow:0 -2px 12px rgba(99,102,241,.08)}
+.nav-item{flex:1;display:flex;flex-direction:column;align-items:center;gap:3px;cursor:pointer;padding:6px 0;color:var(--muted2);font-size:10px;font-family:var(--mono);transition:color .2s;font-weight:500}
+.nav-item.active{color:var(--accent)}
+.nav-item .ni{font-size:20px}
+.nav-dot{width:4px;height:4px;border-radius:2px;background:var(--accent);margin-top:1px;display:none}
+.nav-item.active .nav-dot{display:block}
+
+/* CARDS */
+.card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:16px;margin-bottom:12px;box-shadow:var(--shadow)}
+.card.highlight{border-color:rgba(79,70,229,.25);background:linear-gradient(135deg,#fff,#f5f3ff)}
+.badge{display:inline-flex;align-items:center;padding:3px 10px;border-radius:20px;font-size:11px;font-weight:700;font-family:var(--mono);text-transform:uppercase;letter-spacing:.3px}
+.badge.green{background:var(--green-bg);color:var(--green)}
+.badge.red{background:var(--red-bg);color:var(--red)}
+.badge.amber{background:var(--amber-bg);color:var(--amber)}
+.badge.blue{background:var(--sky-bg);color:var(--sky)}
+.badge.purple{background:var(--purple-bg);color:var(--purple)}
+.badge.indigo{background:var(--accent-light);color:var(--accent)}
+.badge.gray{background:rgba(107,114,128,.1);color:var(--muted)}
+
+/* TRIP ITEM */
+.trip-item{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px 16px;margin-bottom:10px;cursor:pointer;transition:all .2s;box-shadow:var(--shadow)}
+.trip-item:hover{border-color:var(--border2);box-shadow:var(--shadow-lg)}
+.trip-item.done{opacity:.7}
+.trip-top{display:flex;align-items:center;justify-content:space-between;margin-bottom:8px}
+.trip-name{font-size:15px;font-weight:700}
+.trip-date{font-size:12px;color:var(--muted);font-family:var(--mono);margin-bottom:5px}
+.trip-area{font-size:13px;color:var(--accent);font-weight:500}
+.trip-meta{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap}
+.map-btn{display:inline-flex;align-items:center;gap:5px;background:var(--accent-light);border:1px solid rgba(79,70,229,.2);border-radius:7px;padding:5px 10px;font-size:12px;color:var(--accent);text-decoration:none;font-weight:600}
+
+/* MODAL */
+.modal-overlay{position:fixed;inset:0;background:rgba(15,10,50,.4);backdrop-filter:blur(4px);z-index:200;display:none;align-items:flex-end}
+.modal-overlay.open{display:flex}
+.modal{background:var(--surface);border-radius:22px 22px 0 0;padding:20px 16px 36px;width:100%;max-height:92vh;overflow-y:auto;box-shadow:0 -8px 40px rgba(79,70,229,.15)}
+.modal-handle{width:40px;height:4px;background:var(--border2);border-radius:2px;margin:0 auto 20px}
+.modal-title{font-size:19px;font-weight:700;margin-bottom:4px;letter-spacing:-.3px}
+.modal-sub{font-size:13px;color:var(--muted);margin-bottom:20px}
+.close-modal{position:absolute;top:16px;right:16px;background:var(--surface2);border:1px solid var(--border);color:var(--muted);width:30px;height:30px;border-radius:50%;cursor:pointer;font-size:14px;display:flex;align-items:center;justify-content:center}
+
+/* PHOTO UPLOAD */
+.photo-upload{border:2px dashed var(--border2);border-radius:var(--radius);padding:24px;text-align:center;cursor:pointer;transition:all .2s;margin-bottom:12px;background:var(--surface2)}
+.photo-upload:hover{border-color:var(--accent);background:var(--accent-light)}
+.photo-upload input{display:none}
+.photo-required{border-color:var(--red-border)!important;background:var(--red-bg)!important}
+
+/* KPI */
+.kpi-grid{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:16px}
+.kpi-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;box-shadow:var(--shadow)}
+.kpi-label{font-size:11px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.5px;margin-bottom:6px;font-weight:500}
+.kpi-value{font-size:28px;font-weight:700;line-height:1;letter-spacing:-.5px}
+.kpi-value.green{color:var(--green)}
+.kpi-value.red{color:var(--red)}
+.kpi-value.amber{color:var(--amber)}
+.kpi-bar{height:5px;background:var(--surface3);border-radius:3px;margin-top:8px;overflow:hidden}
+.kpi-bar-fill{height:100%;border-radius:3px;background:linear-gradient(90deg,#4f46e5,#7c3aed);transition:width .6s ease}
+
+.section-hdr{font-size:11px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.8px;margin-bottom:10px;margin-top:22px;font-weight:500}
+.section-hdr:first-child{margin-top:0}
+.divider{border:none;border-top:1px solid var(--border);margin:16px 0}
+
+/* REASON GRID */
+.reason-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:16px}
+.reason-btn{background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:10px 8px;font-family:var(--font);font-size:12px;color:var(--text);cursor:pointer;text-align:center;transition:all .15s;font-weight:500}
+.reason-btn.selected{background:var(--red-bg);border-color:var(--red-border);color:var(--red);font-weight:700}
+
+/* FEEDBACK TYPE GRID */
+.feedback-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px}
+.feedback-type-btn{background:var(--surface2);border:1.5px solid var(--border);border-radius:var(--radius-sm);padding:10px 8px;font-family:var(--font);font-size:12px;color:var(--muted);cursor:pointer;text-align:center;transition:all .15s;font-weight:500}
+.feedback-type-btn.sel{border-color:var(--accent);color:var(--accent);background:var(--accent-light);font-weight:700}
+
+/* DRIVER CARD */
+.driver-avatar{width:40px;height:40px;border-radius:50%;background:linear-gradient(135deg,var(--accent-light),var(--purple-bg));border:2px solid rgba(79,70,229,.15);display:flex;align-items:center;justify-content:center;font-size:13px;font-weight:700;color:var(--accent);flex-shrink:0}
+
+/* EMPTY STATE */
+.empty{text-align:center;padding:3rem 1rem;color:var(--muted)}
+.empty-icon{font-size:52px;margin-bottom:12px}
+.empty-text{font-size:14px;font-weight:500}
+
+/* TOAST */
+.toast{position:fixed;top:20px;left:50%;transform:translateX(-50%) translateY(-100px);background:var(--text);border-radius:12px;padding:11px 20px;font-size:13px;font-weight:600;z-index:9999;transition:transform .3s cubic-bezier(.34,1.56,.64,1);white-space:nowrap;color:#fff;box-shadow:var(--shadow-lg);max-width:90vw;white-space:normal;text-align:center}
+.toast.show{transform:translateX(-50%) translateY(0)}
+.toast.success{background:var(--green)}
+.toast.error{background:var(--red)}
+
+/* PHOTO THUMB */
+.photo-thumb-row{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.photo-thumb{width:72px;height:72px;border-radius:10px;object-fit:cover;border:2px solid var(--border);cursor:pointer}
+
+/* LIGHTBOX */
+.lightbox{position:fixed;inset:0;background:rgba(0,0,0,.92);z-index:500;display:none;align-items:center;justify-content:center;padding:16px}
+.lightbox.open{display:flex}
+.lightbox img{max-width:100%;max-height:90vh;border-radius:12px}
+.lightbox-close{position:absolute;top:16px;right:16px;background:rgba(255,255,255,.15);border:none;color:#fff;width:36px;height:36px;border-radius:50%;cursor:pointer;font-size:20px;display:flex;align-items:center;justify-content:center}
+
+/* PHONE BANNER */
+.phone-banner{background:linear-gradient(135deg,#fef3c7,#fff7ed);border:1.5px solid var(--amber-border);border-radius:var(--radius);padding:14px 16px;margin-bottom:14px;display:flex;align-items:center;gap:12px}
+
+/* COMMENT PILL */
+.comment-pill{background:var(--surface2);border:1px solid var(--border);border-radius:9px;padding:8px 12px;margin-bottom:6px}
+.comment-pill-type{font-size:11px;font-weight:700;font-family:var(--mono);text-transform:uppercase;margin-bottom:3px}
+.comment-pill-text{font-size:13px;color:var(--text)}
+.comment-pill-meta{font-size:11px;color:var(--muted2);margin-top:3px}
+
+/* TRIP PROOF CARD (admin feedback) */
+.trip-proof-card{background:var(--surface);border:1px solid var(--border);border-radius:var(--radius);padding:14px;margin-bottom:10px;box-shadow:var(--shadow)}
+.proof-header{display:flex;justify-content:space-between;align-items:flex-start;margin-bottom:8px}
+.proof-title{font-size:15px;font-weight:700}
+.proof-meta{font-size:12px;color:var(--muted);margin-top:2px}
+.proof-photos{display:flex;gap:8px;flex-wrap:wrap;margin:8px 0}
+.proof-photo{width:70px;height:70px;border-radius:9px;object-fit:cover;border:1.5px solid var(--border);cursor:pointer}
+.add-comment-btn{display:inline-flex;align-items:center;gap:5px;background:var(--accent-light);border:1.5px solid rgba(79,70,229,.2);border-radius:8px;padding:6px 12px;font-size:12px;color:var(--accent);cursor:pointer;font-weight:700;font-family:var(--font);transition:all .15s}
+
+/* EXCEL IMPORT */
+.excel-drop{border:2px dashed var(--border2);border-radius:var(--radius);padding:28px;text-align:center;cursor:pointer;background:var(--surface2);transition:all .2s}
+.excel-drop:hover{border-color:var(--green);background:var(--green-bg)}
+.excel-drop input{display:none}
+.import-preview{margin-top:12px}
+.import-row{display:flex;align-items:center;gap:8px;padding:8px 10px;background:var(--surface2);border-radius:8px;margin-bottom:6px;font-size:12px}
+</style>
+</head>
+<body>
+
+<div id="app-loading">
+  <div class="spinner"></div>
+  <div style="font-size:13px;color:var(--muted);font-family:var(--mono)">Connecting to database...</div>
+</div>
+
+<div id="fb-config-screen">
+  <div class="config-card">
+    <div style="font-size:24px;margin-bottom:8px">🔥</div>
+    <div style="font-size:18px;font-weight:700;margin-bottom:6px">Firebase Setup</div>
+    <div style="font-size:13px;color:var(--muted);margin-bottom:20px">Paste your Firebase project config below. See setup guide for instructions.</div>
+    <label>Firebase Config JSON</label>
+    <textarea id="fb-config-input" style="font-family:var(--mono);font-size:12px;min-height:160px" placeholder='{"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."}'></textarea>
+    <button class="btn" onclick="applyFirebaseConfig()">Connect to Firebase</button>
+    <div style="margin-top:14px;background:var(--surface2);border-radius:10px;padding:12px;font-size:12px;color:var(--muted);line-height:1.8">
+      <strong style="color:var(--text)">Quick setup:</strong><br>
+      1. Go to console.firebase.google.com<br>
+      2. Create project → Add web app<br>
+      3. Copy the firebaseConfig object<br>
+      4. Enable Firestore + Storage<br>
+      5. Set Rules to allow read/write (test mode)
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<div class="lightbox" id="lightbox" onclick="closeLightbox()">
+  <button class="lightbox-close">✕</button>
+  <img id="lightbox-img" src="" alt="">
+</div>
+
+<div class="screen" id="login">
+  <div class="login-card" style="margin:auto">
+    <div class="login-logo">
+      <div class="logo-icon">🚚</div>
+      <div>
+        <div class="logo-text">LorryTrack</div>
+        <div class="logo-sub">Delivery Management</div>
+      </div>
+    </div>
+    <div class="role-tabs">
+      <button class="role-tab active" onclick="setRole('driver')">🧑‍✈️ Driver</button>
+      <button class="role-tab" onclick="setRole('admin')">⚙️ Admin</button>
+    </div>
+    <h3>Sign In</h3>
+    <p class="sub" id="login-sub">Enter your driver credentials</p>
+    <div style="margin-top:1rem">
+      <label>Username</label>
+      <input type="text" id="login-user" placeholder="e.g. jong, anne..." autocomplete="username"/>
+      <label>Password</label>
+      <input type="password" id="login-pass" placeholder="••••••" autocomplete="current-password"/>
+      <button class="btn" id="login-btn" onclick="doLogin()">Sign In →</button>
+    </div>
+    <p style="font-size:11px;color:var(--muted);text-align:center;margin-top:14px;font-family:var(--mono)">Driver: name / name123  |  Admin: admin / admin</p>
+  </div>
+</div>
+
+<div class="screen" id="driver-app">
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-icon">🚚</div>
+      <div>
+        <div class="topbar-title">LorryTrack</div>
+        <div class="topbar-sub" id="driver-name-topbar">Driver</div>
+      </div>
+    </div>
+    <div class="avatar" id="driver-avatar" onclick="doLogout()">JG</div>
+  </div>
+  <div class="content" id="driver-content"></div>
+  <div class="bottom-nav">
+    <div class="nav-item active" onclick="driverTab('today')" id="dnav-today"><div class="ni">📦</div><span>Today</span><div class="nav-dot"></div></div>
+    <div class="nav-item" onclick="driverTab('schedule')" id="dnav-schedule"><div class="ni">📅</div><span>Schedule</span><div class="nav-dot"></div></div>
+    <div class="nav-item" onclick="driverTab('kpi')" id="dnav-kpi"><div class="ni">📊</div><span>KPI</span><div class="nav-dot"></div></div>
+    <div class="nav-item" onclick="driverTab('history')" id="dnav-history"><div class="ni">📋</div><span>History</span><div class="nav-dot"></div></div>
+  </div>
+</div>
+
+<div class="screen" id="admin-app">
+  <div class="topbar">
+    <div class="topbar-left">
+      <div class="topbar-icon" style="background:linear-gradient(135deg,#d97706,#b45309)">⚙️</div>
+      <div>
+        <div class="topbar-title">Admin Panel</div>
+        <div class="topbar-sub">LorryTrack</div>
+      </div>
+    </div>
+    <div class="avatar admin-avatar" onclick="doLogout()">AD</div>
+  </div>
+  <div class="content" id="admin-content"></div>
+  <div class="bottom-nav">
+    <div class="nav-item active" onclick="adminTab('dashboard')" id="anav-dashboard"><div class="ni">📊</div><span>Dashboard</span><div class="nav-dot"></div></div>
+    <div class="nav-item" onclick="adminTab('schedule')" id="anav-schedule"><div class="ni">📅</div><span>Schedule</span><div class="nav-dot"></div></div>
+    <div class="nav-item" onclick="adminTab('feedback')" id="anav-feedback"><div class="ni">💬</div><span>Feedback</span><div class="nav-dot"></div></div>
+    <div class="nav-item" onclick="adminTab('drivers')" id="anav-drivers"><div class="ni">👥</div><span>Drivers</span><div class="nav-dot"></div></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="delivery-modal">
+  <div class="modal" style="position:relative">
+    <div class="modal-handle"></div>
+    <button class="close-modal" onclick="closeDeliveryModal()">✕</button>
+    <div id="delivery-modal-content"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="comment-modal">
+  <div class="modal" style="position:relative">
+    <div class="modal-handle"></div>
+    <button class="close-modal" onclick="document.getElementById('comment-modal').classList.remove('open')">✕</button>
+    <div id="comment-modal-content"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="add-trip-modal">
+  <div class="modal" style="position:relative">
+    <div class="modal-handle"></div>
+    <button class="close-modal" onclick="document.getElementById('add-trip-modal').classList.remove('open')">✕</button>
+    <div id="add-trip-modal-content"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="add-driver-modal">
+  <div class="modal" style="position:relative">
+    <div class="modal-handle"></div>
+    <button class="close-modal" onclick="document.getElementById('add-driver-modal').classList.remove('open')">✕</button>
+    <div id="add-driver-modal-content"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="phone-modal">
+  <div class="modal" style="position:relative">
+    <div class="modal-handle"></div>
+    <div id="phone-modal-content"></div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="excel-modal">
+  <div class="modal" style="position:relative">
+    <div class="modal-handle"></div>
+    <button class="close-modal" onclick="document.getElementById('excel-modal').classList.remove('open')">✕</button>
+    <div id="excel-modal-content"></div>
+  </div>
+</div>
+
+<script>
+// ============================================================
+// UI HELPER FUNCTIONS
+// ============================================================
+function fmt(d) {
+  if(!d) return '';
+  const p = d.split('-');
+  return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : d;
+}
+
+function commentColor(t) {
+  const m = {'Customer Complaint':'var(--red)','Attitude Issue':'var(--red)','Image Issue':'var(--amber)','Delivery Issue':'var(--amber)','Praise':'var(--green)'};
+  return m[t] || 'var(--accent)';
+}
+
+function emptyState(icon, txt) {
+  return `<div class="empty"><div class="empty-icon">${icon}</div><div class="empty-text">${txt}</div></div>`;
+}
+
+function statRow(lbl, val, col='text') {
+  return `<div style="display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--surface2);font-size:13px"><span style="color:var(--muted)">${lbl}</span><strong style="color:var(--${col})">${val}</strong></div>`;
+}
+
+function statInline(lbl, val, col='text') {
+  return `<div><span style="color:var(--muted)">${lbl}:</span> <strong style="color:var(--${col})">${val}</strong></div>`;
+}
+
+function kpiCard(lbl, val, max) {
+  const pct = Math.min(100, (val/max)*100);
+  const col = pct>80 ? 'var(--green)' : pct>50 ? 'var(--amber)' : 'var(--red)';
+  return `<div class="kpi-card"><div class="kpi-label">${lbl}</div><div style="font-size:20px;font-weight:700;color:${col}">${val} <span style="font-size:12px;color:var(--muted)">/ ${max}</span></div><div class="kpi-bar"><div class="kpi-bar-fill" style="width:${pct}%;background:${col}"></div></div></div>`;
+}
+
+function showToast(msg, type='success') {
+  const t = document.getElementById('toast');
+  t.textContent = msg;
+  t.className = `toast show ${type}`;
+  setTimeout(()=>t.classList.remove('show'), 3000);
+}
+
+function openLightbox(src) {
+  document.getElementById('lightbox-img').src = src;
+  document.getElementById('lightbox').classList.add('open');
+}
+function closeLightbox() {
+  document.getElementById('lightbox').classList.remove('open');
+}
+
+// ============================================================
+// FIREBASE INIT
+// ============================================================
+const WA_NOTIFY = '+60187811293';
+let db, storage, firebaseReady = false;
+
+function getSavedConfig() {
+  try { return JSON.parse(localStorage.getItem('lorrytrack_fb_config')||'null'); } catch(e){ return null; }
+}
+
+function applyFirebaseConfig() {
+  const raw = document.getElementById('fb-config-input').value.trim();
+  let cfg;
+  try {
+    const match = raw.match(/\{[\s\S]*\}/);
+    cfg = JSON.parse(match ? match[0] : raw);
+  } catch(e) {
+    showToast('Invalid JSON config','error'); return;
+  }
+  localStorage.setItem('lorrytrack_fb_config', JSON.stringify(cfg));
+  location.reload();
+}
+
+async function initFirebase() {
+  const cfg = getSavedConfig();
+  if (!cfg) {
+    document.getElementById('app-loading').style.display='none';
+    document.getElementById('fb-config-screen').classList.add('show');
+    return;
+  }
+  try {
+    if (!firebase.apps.length) firebase.initializeApp(cfg);
+    db = firebase.firestore();
+    storage = firebase.storage();
+    await db.collection('_ping').doc('test').set({t: Date.now()});
+    firebaseReady = true;
+    await seedInitialData();
+    document.getElementById('app-loading').style.display='none';
+    showScreen('login');
+  } catch(e) {
+    console.error(e);
+    document.getElementById('app-loading').style.display='none';
+    document.getElementById('fb-config-screen').classList.add('show');
+    showToast('Firebase connection failed: '+e.message,'error');
+  }
+}
+
+async function seedInitialData() {
+  const snap = await db.collection('drivers').limit(1).get();
+  if (!snap.empty) return;
+  const batch = db.batch();
+  const defaultDrivers = [
+    {id:'jong',name:'Jong',role:'Driver',lorry:'JUF-01',partner:'Namye',phone:'',password:'jong123'},
+    {id:'anne',name:'Anne',role:'Driver',lorry:'ALY-01',partner:'',phone:'',password:'anne123'},
+    {id:'khairil',name:'Khairil',role:'Driver',lorry:'JUB-01',partner:'',phone:'',password:'khairil123'},
+    {id:'shukri',name:'Shukri',role:'Driver',lorry:'SYS-01',partner:'',phone:'',password:'shukri123'},
+    {id:'grace',name:'Grace',role:'Driver',lorry:'JNE-01',partner:'Namye',phone:'',password:'grace123'},
+    {id:'karen',name:'Karen',role:'Driver',lorry:'JTU-01',partner:'',phone:'',password:'karen123'},
+    {id:'walhub',name:'Walhub',role:'Kelindan',lorry:'JNE-01',partner:'',phone:'',password:'walhub123'},
+    {id:'namye',name:'Namye',role:'Kelindan',lorry:'JUF-01',partner:'',phone:'',password:'namye123'},
+  ];
+  defaultDrivers.forEach(d=>{ batch.set(db.collection('drivers').doc(d.id), d); });
+  
+  const today = new Date().toISOString().split('T')[0];
+  const tomorrow = new Date(Date.now()+86400000).toISOString().split('T')[0];
+  const sampleTrips = [
+    {date:today, driver:'jong', area:'99 Gambang', destination:'Gambang', mapLink:'https://maps.google.com/?q=Gambang', status:'pending', adminApproved:false, createdAt:new Date().toISOString()},
+    {date:today, driver:'anne', area:'1-N9 Negeri Sembilan', destination:'N9 Area', mapLink:'https://maps.google.com/?q=N9', status:'pending', adminApproved:false, createdAt:new Date().toISOString()},
+    {date:tomorrow, driver:'jong', area:'1-Mersing', destination:'Mersing', mapLink:'', status:'pending', adminApproved:false, createdAt:new Date().toISOString()},
+  ];
+  for(const t of sampleTrips){
+    batch.set(db.collection('trips').doc('t_'+Date.now()+'_'+Math.random().toString(36).slice(2)), t);
+  }
+  await batch.commit();
+}
+
+// ============================================================
+// AUTH
+// ============================================================
+let currentUser = null;
+let loginRole = 'driver';
+let allDrivers = [];
+let allTrips = [];
+
+function setRole(r) {
+  loginRole = r;
+  document.querySelectorAll('.role-tab').forEach((b,i)=>b.classList.toggle('active',(i===0&&r==='driver')||(i===1&&r==='admin')));
+  document.getElementById('login-sub').textContent = r==='admin'?'Enter admin credentials':'Enter your driver credentials';
+}
+
+async function doLogin() {
+  const u = document.getElementById('login-user').value.trim().toLowerCase();
+  const p = document.getElementById('login-pass').value.trim();
+  if (!u) { showToast('Enter username','error'); return; }
+  const btn = document.getElementById('login-btn');
+  btn.disabled=true; btn.textContent='Signing in...';
+  try {
+    if (loginRole==='admin') {
+      if (u==='admin'&&p==='admin') { currentUser={id:'admin',name:'Admin',role:'Admin',lorry:'',phone:'',password:'admin'}; await loadData(); showApp('admin'); }
+      else showToast('Wrong admin credentials','error');
+    } else {
+      const snap = await db.collection('drivers').doc(u).get();
+      if (snap.exists) {
+        const d = {id:snap.id,...snap.data()};
+        if (p===d.password) { currentUser=d; await loadData(); showApp('driver'); }
+        else showToast('Wrong password','error');
+      } else showToast('Driver not found','error');
+    }
+  } catch(e){ showToast('Login error: '+e.message,'error'); }
+  btn.disabled=false; btn.textContent='Sign In →';
+}
+
+async function doLogout() {
+  if (!confirm('Log out?')) return;
+  currentUser=null; allTrips=[]; allDrivers=[];
+  showScreen('login');
+  document.getElementById('login-user').value='';
+  document.getElementById('login-pass').value='';
+}
+
+async function loadData() {
+  const [driversSnap, tripsSnap] = await Promise.all([
+    db.collection('drivers').get(),
+    db.collection('trips').get()
+  ]);
+  allDrivers = driversSnap.docs.map(d=>({id:d.id,...d.data()}));
+  allTrips = tripsSnap.docs.map(d=>({id:d.id,...d.data()}));
+  expireOldComments();
+}
+
+function expireOldComments() {
+  const cutoff = Date.now() - 7*24*60*60*1000;
+  allTrips.forEach(t=>{
+    if(!t.comments||!t.comments.length) return;
+    const before = t.comments.length;
+    t.comments = t.comments.filter(c=>new Date(c.at).getTime()>cutoff);
+    if(t.comments.length !== before){
+      db.collection('trips').doc(t.id).update({comments: t.comments});
+    }
+  });
+}
+
+function showApp(role) {
+  if (role==='driver') {
+    document.getElementById('driver-name-topbar').textContent = currentUser.name+' · '+currentUser.lorry;
+    document.getElementById('driver-avatar').textContent = currentUser.name.slice(0,2).toUpperCase();
+    showScreen('driver-app');
+    driverTab('today');
+    if (!currentUser.phone) setTimeout(()=>openPhoneModal(), 800);
+  } else {
+    showScreen('admin-app');
+    adminTab('dashboard');
+  }
+}
+
+function showScreen(id) {
+  document.querySelectorAll('.screen').forEach(s=>s.classList.remove('active'));
+  document.getElementById(id).classList.add('active');
+}
+
+// ============================================================
+// PHONE REGISTER
+// ============================================================
+function openPhoneModal() {
+  document.getElementById('phone-modal-content').innerHTML=`
+    <div class="modal-title">📱 Register Phone Number</div>
+    <div class="modal-sub">Admin will send WhatsApp notifications when there's a comment on your trip.</div>
+    <label>Malaysian Phone Number</label>
+    <input type="tel" id="phone-input" placeholder="e.g. 0123456789"/>
+    <button class="btn" onclick="savePhone()">Save Number</button>
+    <button class="btn secondary" style="margin-top:8px" onclick="document.getElementById('phone-modal').classList.remove('open')">Later</button>`;
+  document.getElementById('phone-modal').classList.add('open');
+}
+
+async function savePhone() {
+  const phone = document.getElementById('phone-input').value.trim();
+  if (!phone) { showToast('Enter phone number','error'); return; }
+  await db.collection('drivers').doc(currentUser.id).update({phone});
+  currentUser.phone = phone;
+  const d = allDrivers.find(x=>x.id===currentUser.id);
+  if(d) d.phone = phone;
+  document.getElementById('phone-modal').classList.remove('open');
+  showToast('✅ Phone number saved!','success');
+  driverTab('today');
+}
+
+// ============================================================
+// DRIVER TABS
+// ============================================================
+let currentDriverTab = 'today';
+function driverTab(tab) {
+  currentDriverTab=tab;
+  document.querySelectorAll('[id^=dnav-]').forEach(n=>n.classList.remove('active'));
+  document.getElementById('dnav-'+tab).classList.add('active');
+  const c=document.getElementById('driver-content');
+  if(tab==='today') c.innerHTML=renderDriverToday();
+  else if(tab==='schedule') c.innerHTML=renderDriverSchedule();
+  else if(tab==='kpi') c.innerHTML=renderDriverKPI();
+  else if(tab==='history') c.innerHTML=renderDriverHistory();
+}
+
+function myTrips() { return allTrips.filter(t=>t.driver===currentUser.id); }
+
+function renderDriverToday() {
+  const today=new Date().toISOString().split('T')[0];
+  const todayTrips=myTrips().filter(t=>t.date===today);
+  const upcoming=myTrips().filter(t=>t.date>today&&t.status==='pending').slice(0,3);
+  let html='';
+  if(!currentUser.phone){
+    html+=`<div class="phone-banner"><div style="font-size:24px">📱</div><div><div style="font-size:13px;color:#92400e;font-weight:500">Phone number not registered.</div><span style="font-size:12px;color:var(--amber);font-weight:700;cursor:pointer;text-decoration:underline" onclick="openPhoneModal()">Register now →</span></div></div>`;
+  }
+  html+=`<div class="section-hdr">Today's Deliveries — ${fmt(today)}</div>`;
+  if(todayTrips.length===0){
+    html+=`<div class="card" style="text-align:center;padding:2rem"><div style="font-size:40px;margin-bottom:8px">😴</div><div style="color:var(--muted);font-size:14px;font-weight:500">No deliveries scheduled today</div></div>`;
+    if(upcoming.length>0){ html+=`<div class="section-hdr">Upcoming Trips</div>`; upcoming.forEach(t=>{html+=renderTripCard(t);}); }
+  } else {
+    const done=todayTrips.filter(t=>t.status!=='pending').length;
+    html+=`<div class="card highlight" style="display:flex;justify-content:space-between;padding:14px 16px;margin-bottom:14px">
+      <div><div style="font-size:12px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.5px">Progress</div><div style="font-size:22px;font-weight:700;color:var(--accent)">${done}/${todayTrips.length}</div></div>
+      <div style="text-align:right"><div style="font-size:12px;color:var(--muted);font-family:var(--mono);text-transform:uppercase;letter-spacing:.5px">Pending</div><div style="font-size:22px;font-weight:700;color:var(--amber)">${todayTrips.filter(t=>t.status==='pending').length}</div></div>
+    </div>`;
+    todayTrips.forEach(t=>{html+=renderTripCard(t);});
+  }
+  
+  const cutoff=Date.now()-7*24*60*60*1000;
+  const recentComments=[];
+  myTrips().forEach(t=>(t.comments||[]).forEach(c=>{if(new Date(c.at).getTime()>cutoff) recentComments.push({...c,tripDest:t.destination,tripDate:t.date});}));
+  if(recentComments.length){
+    html+=`<div class="section-hdr">Recent Admin Comments (last 7 days)</div>`;
+    recentComments.slice().reverse().forEach(c=>{
+      const col=commentColor(c.type);
+      html+=`<div class="comment-pill"><div class="comment-pill-type" style="color:${col}">${c.type}</div><div class="comment-pill-text">${c.text}</div><div class="comment-pill-meta">${c.tripDest} · ${fmt(c.tripDate)} · ${c.at.split('T')[0]}</div></div>`;
+    });
+  }
+  return html;
+}
+
+function renderTripCard(t) {
+  const sc={pending:'amber',delivered:'green',undelivered:'red'}[t.status]||'gray';
+  const sl={pending:'Pending',delivered:'Delivered',undelivered:'Not Delivered'}[t.status];
+  const hasComments=(t.comments||[]).length;
+  return `<div class="trip-item ${t.status==='delivered'?'done':''}" onclick="openDelivery('${t.id}')">
+    <div class="trip-top"><div class="trip-name">${t.destination}</div><span class="badge ${sc}">${sl}</span></div>
+    <div class="trip-date">📅 ${fmt(t.date)}</div>
+    <div class="trip-area">📍 ${t.area}</div>
+    <div class="trip-meta">
+      ${t.mapLink?`<a class="map-btn" href="${t.mapLink}" target="_blank" onclick="event.stopPropagation()">🗺 Maps</a>`:''}
+      ${t.photos&&t.photos.length?`<span class="badge gray">📷 ${t.photos.length}</span>`:''}
+      ${hasComments?`<span class="badge red">💬 ${hasComments}</span>`:''}
+    </div>
+  </div>`;
+}
+
+function renderDriverSchedule() {
+  const trips=myTrips().sort((a,b)=>a.date.localeCompare(b.date));
+  let html=`<div class="section-hdr">My Schedule</div>`;
+  if(!trips.length) return html+emptyState('📅','No trips scheduled');
+  trips.forEach(t=>{html+=renderTripCard(t);});
+  return html;
+}
+
+function renderDriverKPI() {
+  const trips=myTrips();
+  const delivered=trips.filter(t=>t.status==='delivered').length;
+  const undelivered=trips.filter(t=>t.status==='undelivered').length;
+  const total=trips.length;
+  const complaints=trips.reduce((a,t)=>a+(t.comments||[]).filter(c=>c.type==='Customer Complaint').length,0);
+  const aMax=500,sMax=300,atMax=200,iMax=100;
+  const aScore=Math.max(0,aMax-undelivered*50);
+  const sScore=Math.max(0,sMax-undelivered*10);
+  const atScore=Math.max(0,atMax-complaints*50);
+  const iScore=iMax;
+  const total_score=aScore+sScore+atScore+iScore;
+  const maxScore=1100;
+  return `
+  <div class="section-hdr">My KPI Score</div>
+  <div class="card highlight" style="text-align:center;padding:1.75rem">
+    <div style="font-size:52px;font-weight:700;letter-spacing:-2px;color:${total_score>800?'var(--green)':total_score>500?'var(--amber)':'var(--red)'}">${total_score}</div>
+    <div style="color:var(--muted);font-size:13px;font-weight:500">out of ${maxScore} points</div>
+    <div class="kpi-bar" style="margin-top:14px"><div class="kpi-bar-fill" style="width:${(total_score/maxScore*100).toFixed(0)}%;background:${total_score>800?'var(--green)':total_score>500?'var(--amber)':'var(--red)'}"></div></div>
+  </div>
+  <div class="kpi-grid">
+    ${kpiCard('Attendance',aScore,aMax)}${kpiCard('Shop Delivery',sScore,sMax)}
+    ${kpiCard('Attitude',atScore,atMax)}${kpiCard('Image',iScore,iMax)}
+  </div>
+  <div class="section-hdr">Trip Stats</div>
+  <div class="card">
+    ${statRow('Total Trips',total)}${statRow('Delivered',delivered,'green')}
+    ${statRow('Not Delivered',undelivered,'red')}${statRow('Complaints',complaints,complaints>0?'red':'green')}
+  </div>`;
+}
+
+function renderDriverHistory() {
+  const trips=myTrips().filter(t=>t.status!=='pending').sort((a,b)=>b.date.localeCompare(a.date));
+  let html=`<div class="section-hdr">Delivery History</div>`;
+  if(!trips.length) return html+emptyState('📋','No completed deliveries yet');
+  trips.forEach(t=>{html+=renderTripCard(t);});
+  return html;
+}
+
+// ============================================================
+// DELIVERY MODAL
+// ============================================================
+let currentTripId=null, uploadedPhotoData=null, selectedReason='';
+
+function openDelivery(tripId) {
+  const trip=allTrips.find(t=>t.id===tripId);
+  if(!trip) return;
+  currentTripId=tripId; selectedReason=''; uploadedPhotoData=null;
+  renderDeliveryModal(trip);
+  document.getElementById('delivery-modal').classList.add('open');
+}
+
+function renderDeliveryModal(trip) {
+  const sc={pending:'amber',delivered:'green',undelivered:'red'}[trip.status];
+  const sl={pending:'Pending',delivered:'Delivered',undelivered:'Not Delivered'}[trip.status];
+
+  let photoHtml='';
+  if(trip.photos&&trip.photos.length){
+    photoHtml=`<div class="photo-thumb-row">${trip.photos.map(p=>`<img class="photo-thumb" src="${p}" onclick="openLightbox('${p}')">`).join('')}</div>`;
+  }
+
+  let actionHtml='';
+  if(trip.status==='pending'){
+    actionHtml=`
+    <div class="section-hdr" style="margin-top:16px">📷 Delivery Proof Photo <span style="color:var(--red)">*Required</span></div>
+    <div class="photo-upload ${!uploadedPhotoData?'photo-required':''}" id="photo-upload-zone" onclick="document.getElementById('photo-input-dm').click()">
+      <input type="file" id="photo-input-dm" accept="image/*" capture="environment" onchange="handlePhotoUpload(event)">
+      ${uploadedPhotoData
+        ? `<img src="${uploadedPhotoData}" style="width:100%;border-radius:10px;max-height:200px;object-fit:cover">`
+        : `<div style="font-size:36px;margin-bottom:8px">📷</div><div style="font-size:13px;color:var(--red);font-weight:600">Tap to take photo (required)</div><div style="font-size:12px;color:var(--muted);margin-top:4px">You must upload proof before marking delivery</div>`}
+    </div>
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:12px">
+      <button class="btn success" style="padding:13px" onclick="confirmDelivered()" ${!uploadedPhotoData?'disabled':''}>✅ Delivered</button>
+      <button class="btn danger" style="padding:13px" onclick="showReasonPicker()" ${!uploadedPhotoData?'disabled':''}>❌ Not Delivered</button>
+    </div>
+    ${!uploadedPhotoData?`<p style="font-size:12px;color:var(--red);text-align:center;margin-bottom:12px;font-weight:600">⚠️ Upload photo first to continue</p>`:''}`;
+  }
+
+  if(trip.status==='undelivered'&&!trip.rescheduleRequested){
+    actionHtml+=`<hr class="divider"><button class="btn amber-btn" onclick="requestReschedule('${trip.id}')">📩 Request Reschedule</button>`;
+  }
+
+  const comments=(trip.comments||[]).filter(c=>new Date(c.at).getTime()>Date.now()-7*24*60*60*1000);
+  let commHtml='';
+  if(comments.length){
+    commHtml=`<div class="section-hdr">Admin Comments</div>`;
+    comments.forEach(c=>{
+      commHtml+=`<div class="comment-pill"><div class="comment-pill-type" style="color:${commentColor(c.type)}">${c.type}</div><div class="comment-pill-text">${c.text}</div><div class="comment-pill-meta">${c.at.split('T')[0]}</div></div>`;
+    });
+  }
+
+  document.getElementById('delivery-modal-content').innerHTML=`
+    <div class="modal-title">${trip.destination}</div>
+    <div class="modal-sub">📍 ${trip.area} · 📅 ${fmt(trip.date)}</div>
+    <div style="display:flex;align-items:center;gap:8px;margin-bottom:16px;flex-wrap:wrap">
+      <span class="badge ${sc}">${sl}</span>
+      ${trip.mapLink?`<a class="map-btn" href="${trip.mapLink}" target="_blank">🗺 Open Maps</a>`:''}
+    </div>
+    ${trip.notes?`<div class="card" style="margin-bottom:12px;font-size:13px;color:var(--muted)">📝 ${trip.notes}</div>`:''}
+    ${trip.undeliveredReason?`<div class="card" style="margin-bottom:12px"><span style="font-size:12px;color:var(--muted)">Reason:</span> <strong style="color:var(--red)">${trip.undeliveredReason}</strong></div>`:''}
+    ${photoHtml}${actionHtml}${commHtml}`;
+}
+
+function handlePhotoUpload(e) {
+  const file=e.target.files[0]; if(!file) return;
+  const reader=new FileReader();
+  reader.onload=ev=>{
+    uploadedPhotoData=ev.target.result;
+    const trip=allTrips.find(t=>t.id===currentTripId);
+    renderDeliveryModal(trip);
+  };
+  reader.readAsDataURL(file);
+}
+
+async function confirmDelivered() {
+  if(!uploadedPhotoData){showToast('Upload delivery photo first','error');return;}
+  const btn=event.target; btn.disabled=true; btn.textContent='Saving...';
+  try{
+    const photoURL=await uploadPhoto(uploadedPhotoData, currentTripId);
+    const update={status:'delivered',photos:firebase.firestore.FieldValue.arrayUnion(photoURL),deliveredAt:new Date().toISOString(), adminApproved:false};
+    await db.collection('trips').doc(currentTripId).update(update);
+    const trip=allTrips.find(t=>t.id===currentTripId);
+    Object.assign(trip,{status:'delivered',photos:[...(trip.photos||[]),photoURL],deliveredAt:update.deliveredAt, adminApproved:false});
+    uploadedPhotoData=null;
+    closeDeliveryModal();
+    showToast('✅ Delivery confirmed!','success');
+    driverTab(currentDriverTab);
+  }catch(e){showToast('Error: '+e.message,'error');}
+  btn.disabled=false; btn.textContent='✅ Delivered';
+}
+
+function showReasonPicker() {
+  if(!uploadedPhotoData){showToast('Upload photo first','error');return;}
+  const reasons=['Shop Closed','Customer Not Available','Wrong Address','No Stock','Traffic Accident','Weather Issue','Access Denied','Other'];
+  const trip=allTrips.find(t=>t.id===currentTripId);
+  document.getElementById('delivery-modal-content').innerHTML=`
+    <div class="modal-title">Reason Not Delivered</div>
+    <div class="modal-sub">${trip.destination} · ${fmt(trip.date)}</div>
+    <div class="section-hdr">Select reason</div>
+    <div class="reason-grid">${reasons.map(r=>`<button class="reason-btn" onclick="selectReason('${r}',this)">${r}</button>`).join('')}</div>
+    <label>Additional Notes (optional)</label>
+    <textarea id="reason-notes" placeholder="Add details..."></textarea>
+    <button class="btn danger" onclick="confirmUndelivered()">Confirm Not Delivered</button>
+    <button class="btn secondary" style="margin-top:8px" onclick="openDelivery('${currentTripId}')">← Back</button>`;
+}
+
+function selectReason(r,el){
+  selectedReason=r;
+  document.querySelectorAll('.reason-btn').forEach(b=>b.classList.remove('selected'));
+  el.classList.add('selected');
+}
+
+async function confirmUndelivered() {
+  if(!selectedReason){showToast('Select a reason','error');return;}
+  const btn=event.target; btn.disabled=true; btn.textContent='Saving...';
+  try{
+    const photoURL=await uploadPhoto(uploadedPhotoData, currentTripId);
+    const notes=document.getElementById('reason-notes').value;
+    const update={status:'undelivered',undeliveredReason:selectedReason,notes,photos:firebase.firestore.FieldValue.arrayUnion(photoURL),rescheduleRequested:false, adminApproved:false};
+    await db.collection('trips').doc(currentTripId).update(update);
+    const trip=allTrips.find(t=>t.id===currentTripId);
+    Object.assign(trip,{status:'undelivered',undeliveredReason:selectedReason,notes,photos:[...(trip.photos||[]),photoURL],rescheduleRequested:false, adminApproved:false});
+    uploadedPhotoData=null; selectedReason='';
+    closeDeliveryModal();
+    showToast('Marked as not delivered','error');
+    driverTab(currentDriverTab);
+  }catch(e){showToast('Error: '+e.message,'error');}
+  btn.disabled=false;
+}
+
+async function requestReschedule(tripId) {
+  await db.collection('trips').doc(tripId).update({rescheduleRequested:true,rescheduleAt:new Date().toISOString()});
+  const trip=allTrips.find(t=>t.id===tripId);
+  if(trip) trip.rescheduleRequested=true;
+  closeDeliveryModal();
+  showToast('📩 Reschedule request sent!','success');
+}
+
+async function uploadPhoto(dataUrl, tripId) {
+  try{
+    const blob=dataURItoBlob(dataUrl);
+    const ref=storage.ref(`delivery_photos/${tripId}_${Date.now()}.jpg`);
+    await ref.put(blob);
+    return await ref.getDownloadURL();
+  }catch(e){
+    console.warn('Storage upload failed, using base64 fallback',e);
+    return dataUrl; 
+  }
+}
+
+function dataURItoBlob(dataURI){
+  const byteString=atob(dataURI.split(',')[1]);
+  const mimeString=dataURI.split(',')[0].split(':')[1].split(';')[0];
+  const ab=new ArrayBuffer(byteString.length);
+  const ia=new Uint8Array(ab);
+  for(let i=0;i<byteString.length;i++) ia[i]=byteString.charCodeAt(i);
+  return new Blob([ab],{type:mimeString});
+}
+
+function closeDeliveryModal(){
+  document.getElementById('delivery-modal').classList.remove('open');
+  uploadedPhotoData=null;
+}
+
+// ============================================================
+// ADMIN TABS
+// ============================================================
+let currentAdminTab='dashboard';
+async function adminTab(tab) {
+  currentAdminTab=tab;
+  document.querySelectorAll('[id^=anav-]').forEach(n=>n.classList.remove('active'));
+  document.getElementById('anav-'+tab).classList.add('active');
+  await loadData();
+  const c=document.getElementById('admin-content');
+  if(tab==='dashboard') c.innerHTML=renderAdminDashboard();
+  else if(tab==='schedule') c.innerHTML=renderAdminSchedule();
+  else if(tab==='feedback') c.innerHTML=renderAdminFeedback();
+  else if(tab==='drivers') c.innerHTML=renderAdminDrivers();
+}
+
+function renderAdminDashboard() {
+  const today=new Date().toISOString().split('T')[0];
+  const todayTrips=allTrips.filter(t=>t.date===today);
+  const pending=allTrips.filter(t=>t.status==='pending').length;
+  const delivered=allTrips.filter(t=>t.status==='delivered').length;
+  const undelivered=allTrips.filter(t=>t.status==='undelivered').length;
+  
+  let html=`
+  <div class="section-hdr">Fleet Overview</div>
+  <div class="kpi-grid">
+    <div class="kpi-card"><div class="kpi-label">Total Trips</div><div class="kpi-value">${allTrips.length}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Delivered</div><div class="kpi-value green">${delivered}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Pending</div><div class="kpi-value amber">${pending}</div></div>
+    <div class="kpi-card"><div class="kpi-label">Failed</div><div class="kpi-value red">${undelivered}</div></div>
+  </div>
+  <div class="section-hdr">Today's Activity — ${fmt(today)}</div>`;
+  
+  if(!todayTrips.length) html+=`<div class="card" style="text-align:center;color:var(--muted);padding:2rem">No trips today</div>`;
+  else todayTrips.forEach(t=>{
+    const d=allDrivers.find(x=>x.id===t.driver)||{name:t.driver};
+    const sc={pending:'amber',delivered:'green',undelivered:'red'}[t.status];
+    html+=`<div class="card" style="margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:center">
+        <div><div style="font-weight:700">${t.destination}</div><div style="font-size:12px;color:var(--muted)">${d.name} · ${t.area}</div></div>
+        <span class="badge ${sc}">${t.status}</span>
+      </div>
+      ${t.photos&&t.photos.length?`<div class="photo-thumb-row">${t.photos.map(p=>`<img class="photo-thumb" src="${p}" onclick="openLightbox('${p}')">`).join('')}</div>`:''}
+    </div>`;
+  });
+  return html;
+}
+
+function renderAdminSchedule() {
+  const sorted=[...allTrips].sort((a,b)=>a.date.localeCompare(b.date));
+  let html=`
+  <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
+    <div class="section-hdr" style="margin:0">Trip Schedule</div>
+    <div style="display:flex;gap:8px">
+      <button class="btn small amber-btn" onclick="openExcelImport()">📊 Import Excel</button>
+      <button class="btn small" onclick="openAddTrip()">+ Add Trip</button>
+    </div>
+  </div>`;
+  sorted.forEach(t=>{
+    const d=allDrivers.find(x=>x.id===t.driver)||{name:t.driver};
+    const sc={pending:'amber',delivered:'green',undelivered:'red'}[t.status];
+    html+=`<div class="card" style="margin-bottom:8px">
+      <div style="display:flex;justify-content:space-between;align-items:flex-start">
+        <div style="flex:1">
+          <div style="font-weight:700;font-size:14px">${t.destination}</div>
+          <div style="font-size:12px;color:var(--muted);margin:2px 0">${fmt(t.date)} · ${d.name}</div>
+          <div style="font-size:12px;color:var(--accent);font-weight:500">${t.area}</div>
+          ${t.mapLink?`<a class="map-btn" href="${t.mapLink}" target="_blank" style="margin-top:6px;display:inline-flex">🗺 Maps</a>`:''}
+        </div>
+        <div style="display:flex;flex-direction:column;align-items:flex-end;gap:6px">
+          <span class="badge ${sc}">${t.status}</span>
+          <button class="btn danger small" onclick="deleteTrip('${t.id}')">Delete</button>
+        </div>
+      </div>
+      ${t.photos&&t.photos.length?`<div class="photo-thumb-row">${t.photos.map(p=>`<img class="photo-thumb" src="${p}" onclick="openLightbox('${p}')">`).join('')}</div>`:''}
+    </div>`;
+  });
+  return html;
+}
+
+// FEEDBACK: Shows all non-pending trips that haven't been approved yet
+function renderAdminFeedback() {
+  const eligibleTrips = allTrips.filter(t => t.status !== 'pending' && !t.adminApproved);
+  const sorted = [...eligibleTrips].sort((a,b) => b.date.localeCompare(a.date));
+
+  let html = `<div class="section-hdr">Delivery Feedback & Approval</div>
+  <p style="font-size:13px;color:var(--muted);margin-bottom:14px">Review completed and failed deliveries. Click Approve to clear them from this list.</p>`;
+
+  if(!sorted.length) return html + emptyState('💬','No trips pending approval');
+
+  sorted.forEach(t => {
+    const d = allDrivers.find(x => x.id === t.driver) || {name:t.driver};
+    const sc = {delivered:'green', undelivered:'red'}[t.status];
+    const sl = {delivered:'Delivered', undelivered:'Not Delivered'}[t.status];
+    const activeCmts = (t.comments||[]).filter(c => new Date(c.at).getTime() > Date.now() - 7*24*60*60*1000);
+
+    let photosHtml = '';
+    if(t.photos && t.photos.length){
+      photosHtml = `<div class="proof-photos">${t.photos.map(p => `<img class="proof-photo" src="${p}" onclick="openLightbox('${p}')">`).join('')}</div>`;
+    } else {
+      photosHtml = `<div style="font-size:12px;color:var(--muted);padding:4px 0">📷 No delivery proof photo</div>`;
+    }
+
+    let cmtHtml = '';
+    if(activeCmts.length){
+      activeCmts.forEach(c => {
+        cmtHtml += `<div class="comment-pill"><div class="comment-pill-type" style="color:${commentColor(c.type)}">${c.type}</div><div class="comment-pill-text">${c.text}</div><div class="comment-pill-meta">${c.at.split('T')[0]} ${c.notified ? '· 📱 WA sent' : ''}</div></div>`;
+      });
+    }
+
+    const rescheduleBadge = t.rescheduleRequested ? `<div style="font-size:12px;color:var(--amber);margin-top:4px;font-weight:700">⚠️ Driver Requested Reschedule</div>` : '';
+
+    html += `<div class="trip-proof-card">
+      <div class="proof-header">
+        <div>
+          <div class="proof-title">${t.destination}</div>
+          <div class="proof-meta">📅 ${fmt(t.date)} · 👤 ${d.name}</div>
+          <div style="font-size:12px;color:var(--accent);margin-top:2px">${t.area}</div>
+          ${t.undeliveredReason ? `<div style="font-size:12px;color:var(--red);margin-top:3px;font-weight:600">❌ ${t.undeliveredReason}</div>` : ''}
+          ${rescheduleBadge}
+        </div>
+        <span class="badge ${sc}">${sl}</span>
+      </div>
+      ${photosHtml}
+      ${cmtHtml}
+      <div style="display:flex;gap:8px;margin-top:12px">
+        <button class="add-comment-btn" style="flex:1;justify-content:center;margin:0" onclick="openAddComment('${t.id}')">💬 Add Comment</button>
+        <button class="btn success" style="flex:1;padding:6px 12px;font-size:12px;box-shadow:none;border-radius:8px" onclick="approveTrip('${t.id}')">✅ Approve</button>
+      </div>
+    </div>`;
+  });
+  return html;
+}
+
+async function approveTrip(tripId) {
+  if(!confirm('Approve this delivery? It will be removed from the feedback list.')) return;
+  try {
+    await db.collection('trips').doc(tripId).update({ adminApproved: true });
+    const trip = allTrips.find(t => t.id === tripId);
+    if(trip) trip.adminApproved = true;
+    showToast('✅ Trip approved and cleared!', 'success');
+    adminTab('feedback');
+  } catch(e) { showToast('Error: ' + e.message, 'error'); }
+}
+
+function renderAdminDrivers() {
+  let html=`<div class="section-hdr">Drivers & KPI</div>`;
+  allDrivers.forEach(d=>{
+    const trips=allTrips.filter(t=>t.driver===d.id);
+    const delivered=trips.filter(t=>t.status==='delivered').length;
+    const undelivered=trips.filter(t=>t.status==='undelivered').length;
+    const complaints=trips.reduce((a,t)=>a+(t.comments||[]).filter(c=>c.type==='Customer Complaint').length,0);
+    const maxScore=d.role==='Driver'?1100:660;
+    const score=Math.max(0,maxScore-undelivered*50-complaints*50);
+    const pct=Math.min(100,(score/maxScore*100)).toFixed(0);
+    html+=`<div class="card" style="margin-bottom:10px">
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
+        <div style="display:flex;align-items:center;gap:10px">
+          <div class="driver-avatar">${d.name.slice(0,2).toUpperCase()}</div>
+          <div>
+            <div style="font-weight:700;font-size:14px">${d.name}</div>
+            <div style="font-size:11px;color:var(--muted);font-family:var(--mono)">${d.role} · ${d.lorry||'—'}</div>
+          </div>
+        </div>
+        <span class="badge ${score>800?'green':score>500?'amber':'red'}">${score} pts</span>
+      </div>
+      <div class="kpi-bar"><div class="kpi-bar-fill" style="width:${pct}%;background:${score>800?'var(--green)':score>500?'var(--amber)':'var(--red)'}"></div></div>
+    </div>`;
+  });
+  return html;
+}
+
+// ============================================================
+// ADD COMMENT (Admin)
+// ============================================================
+let selectedCommentType='';
+function openAddComment(tripId) {
+  selectedCommentType='';
+  const trip=allTrips.find(t=>t.id===tripId);
+  const d=allDrivers.find(x=>x.id===trip.driver)||{name:trip.driver,phone:''};
+  const fbTypes=['Customer Complaint','Attitude Issue','Image Issue','Delivery Issue','Praise','Other'];
+  document.getElementById('comment-modal-content').innerHTML=`
+    <div class="modal-title">Add Comment</div>
+    <div class="modal-sub">${trip.destination} · ${d.name} · ${fmt(trip.date)}</div>
+    <label>Comment Type</label>
+    <div class="feedback-grid">${fbTypes.map(t=>`<button class="feedback-type-btn" onclick="selectCommentType('${t}',this)">${t}</button>`).join('')}</div>
+    <label>Comment</label>
+    <textarea id="cmt-text" placeholder="Describe the issue or feedback..."></textarea>
+    <div style="font-size:12px;color:var(--muted);margin-bottom:14px;background:var(--surface2);border-radius:9px;padding:10px 12px">
+      📱 WhatsApp will open for: <strong style="color:var(--text)">${d.name}</strong>${d.phone?' ('+d.phone+')':' (no phone)'}
+    </div>
+    <button class="btn" onclick="saveComment('${tripId}')">💬 Save & Notify via WhatsApp</button>`;
+  document.getElementById('comment-modal').classList.add('open');
+}
+
+function selectCommentType(t,el){
+  selectedCommentType=t;
+  document.querySelectorAll('.feedback-type-btn').forEach(b=>b.classList.remove('sel'));
+  el.classList.add('sel');
+}
+
+async function saveComment(tripId) {
+  if(!selectedCommentType){showToast('Select comment type','error');return;}
+  const text=document.getElementById('cmt-text').value.trim();
+  if(!text){showToast('Enter comment','error');return;}
+  const trip=allTrips.find(t=>t.id===tripId);
+  const d=allDrivers.find(x=>x.id===trip.driver)||{name:trip.driver,phone:''};
+  const comment={id:'c'+Date.now(),type:selectedCommentType,text,at:new Date().toISOString(),notified:true};
+  const updatedComments=[...(trip.comments||[]),comment];
+  await db.collection('trips').doc(tripId).update({comments:updatedComments});
+  trip.comments=updatedComments;
+  sendWANotification(d,trip,comment);
+  selectedCommentType='';
+  document.getElementById('comment-modal').classList.remove('open');
+  showToast('✅ Comment saved!','success');
+  adminTab('feedback');
+}
+
+function sendWANotification(driver,trip,comment){
+  const msg=`🚚 *LorryTrack Notification*\n\nDriver: *${driver.name}*\nTrip: *${trip.destination}* (${trip.date})\nArea: ${trip.area}\n\n📋 *${comment.type}*\n${comment.text}\n\n— LorryTrack Admin`;
+  const enc=encodeURIComponent(msg);
+  if(driver.phone){
+    const p=driver.phone.replace(/^0/,'60').replace(/[^0-9]/g,'');
+    window.open(`https://wa.me/${p}?text=${enc}`,'_blank');
+  } else {
+    const ap=WA_NOTIFY.replace(/[^0-9]/g,'');
+    window.open(`https://wa.me/${ap}?text=${enc}`,'_blank');
+  }
+}
+
+// ============================================================
+// ADD TRIP & EXCEL IMPORT (Admin)
+// ============================================================
+function openAddTrip() {
+  document.getElementById('add-trip-modal-content').innerHTML=`
+    <div class="modal-title">Add Trip</div>
+    <div class="modal-sub">Schedule a new delivery trip</div>
+    <label>Date</label>
+    <input type="text" id="nt-date" placeholder="YYYY-MM-DD" value="${new Date().toISOString().split('T')[0]}"/>
+    <label>Driver</label>
+    <select id="nt-driver">${allDrivers.map(d=>`<option value="${d.id}">${d.name} (${d.role})</option>`).join('')}</select>
+    <label>Destination</label>
+    <input type="text" id="nt-dest" placeholder="e.g. Kluang"/>
+    <label>Area / Route</label>
+    <input type="text" id="nt-area" placeholder="e.g. 3-Kluang & Target x3"/>
+    <label>Google Maps Link</label>
+    <input type="text" id="nt-map" placeholder="http://maps..."/>
+    <button class="btn" onclick="saveNewTrip()">Save Trip</button>`;
+  document.getElementById('add-trip-modal').classList.add('open');
+}
+
+async function saveNewTrip() {
+  const date=document.getElementById('nt-date').value;
+  const driver=document.getElementById('nt-driver').value;
+  const dest=document.getElementById('nt-dest').value.trim();
+  const area=document.getElementById('nt-area').value.trim();
+  const mapLink=document.getElementById('nt-map').value.trim();
+  if(!date||!dest||!area){showToast('Fill required fields','error');return;}
+  const trip={date,driver,destination:dest,area,mapLink,notes:'',status:'pending',photos:[],undeliveredReason:'',deliveredAt:null,comments:[],rescheduleRequested:false,adminApproved:false,createdAt:new Date().toISOString()};
+  const ref=await db.collection('trips').add(trip);
+  allTrips.push({id:ref.id,...trip});
+  document.getElementById('add-trip-modal').classList.remove('open');
+  showToast('✅ Trip added','success');
+  adminTab('schedule');
+}
+
+async function deleteTrip(id) {
+  if(!confirm('Delete this trip?')) return;
+  await db.collection('trips').doc(id).delete();
+  allTrips=allTrips.filter(t=>t.id!==id);
+  showToast('Trip deleted');
+  adminTab('schedule');
+}
+
+let parsedExcelRows=[];
+function openExcelImport() {
+  parsedExcelRows=[];
+  document.getElementById('excel-modal-content').innerHTML=`
+    <div class="modal-title">📊 Import Trips from Excel</div>
+    <div class="modal-sub">Upload an Excel file to auto-schedule trips.</div>
+    <div style="background:var(--surface2);border-radius:10px;padding:12px;font-size:12px;color:var(--muted);margin-bottom:16px;line-height:1.9">
+      <strong style="color:var(--text)">Required columns (row 1 = header):</strong><br>
+      <code style="font-family:var(--mono)">Date</code> (YYYY-MM-DD)<br>
+      <code style="font-family:var(--mono)">Driver</code> (driver id, e.g. jong)<br>
+      <code style="font-family:var(--mono)">Destination</code><br>
+      <code style="font-family:var(--mono)">Area</code><br>
+      <code style="font-family:var(--mono)">MapLink</code> (optional)
+    </div>
+    <div class="excel-drop" onclick="document.getElementById('excel-file-input').click()">
+      <input type="file" id="excel-file-input" accept=".xlsx,.xls,.csv" onchange="handleExcelUpload(event)">
+      <div style="font-size:36px;margin-bottom:8px">📊</div>
+      <div style="font-size:14px;font-weight:600;color:var(--green)">Tap to upload Excel file</div>
+    </div>
+    <div id="excel-preview"></div>
+    <div id="excel-import-btn-wrap"></div>`;
+  document.getElementById('excel-modal').classList.add('open');
+}
+
+function handleExcelUpload(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+    const data = evt.target.result;
+    const workbook = XLSX.read(data, {type: 'binary'});
+    const firstSheetName = workbook.SheetNames[0];
+    const worksheet = workbook.Sheets[firstSheetName];
+    parsedExcelRows = XLSX.utils.sheet_to_json(worksheet);
+
+    let html = '<div class="section-hdr">Preview</div>';
+    if(parsedExcelRows.length === 0) {
+       html += '<div style="color:var(--red);font-size:12px">No data found or wrong format.</div>';
+    } else {
+       html += `<div style="font-size:12px;color:var(--muted);margin-bottom:8px">Found ${parsedExcelRows.length} trips.</div>`;
+       parsedExcelRows.slice(0,3).forEach(row => {
+         html += `<div class="import-row">
+            <div style="font-weight:700">${row.Destination || 'N/A'}</div>
+            <div style="color:var(--muted)">${row.Date || 'N/A'} · Driver: ${row.Driver || 'N/A'}</div>
+         </div>`;
+       });
+       if(parsedExcelRows.length > 3) html += `<div style="font-size:11px;color:var(--muted);text-align:center">...and ${parsedExcelRows.length - 3} more</div>`;
+    }
+    document.getElementById('excel-preview').innerHTML = html;
+
+    if(parsedExcelRows.length > 0) {
+       document.getElementById('excel-import-btn-wrap').innerHTML = `<button class="btn success" style="margin-top:12px;width:100%" onclick="confirmExcelImport()">✅ Import ${parsedExcelRows.length} Trips</button>`;
+    }
+  };
+  reader.readAsBinaryString(file);
+}
+
+async function confirmExcelImport() {
+  if(!parsedExcelRows.length) return;
+  const btn = event.target; btn.disabled = true; btn.textContent = 'Importing...';
+  let count = 0;
+  for(const row of parsedExcelRows) {
+    if(!row.Date || !row.Destination || !row.Area) continue; 
+    const trip = {
+      date: String(row.Date).split('T')[0],
+      driver: row.Driver ? String(row.Driver).toLowerCase() : 'jong',
+      destination: String(row.Destination),
+      area: String(row.Area),
+      mapLink: row.MapLink ? String(row.MapLink) : '',
+      notes: '',
+      status: 'pending',
+      photos: [],
+      undeliveredReason: '',
+      deliveredAt: null,
+      comments: [],
+      rescheduleRequested: false,
+      adminApproved: false,
+      createdAt: new Date().toISOString()
+    };
+    const ref = await db.collection('trips').add(trip);
+    allTrips.push({id: ref.id, ...trip});
+    count++;
+  }
+  document.getElementById('excel-modal').classList.remove('open');
+  showToast(`✅ Successfully imported ${count} trips!`, 'success');
+  parsedExcelRows = [];
+  adminTab('schedule');
+}
+
+// ============================================================
+// START APP
+// ============================================================
+window.onload = initFirebase;
+</script>
+</body>
+</html>
