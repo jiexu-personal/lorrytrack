@@ -581,7 +581,20 @@ function driverTab(tab) {
   else if(tab==='history') c.innerHTML=renderDriverHistory();
 }
 
-function myTrips() { return allTrips.filter(t=>t.driver===currentUser.id); }
+function myTrips() { 
+  // 只要 trip 的 driver 是当前用户，或者 kelindan 是当前用户，就显示出来
+  return allTrips.filter(t => t.driver === currentUser.id || t.kelindan === currentUser.id); 
+}
+
+function getTeamName(t) {
+  const dName = allDrivers.find(x => x.id === t.driver)?.name || (t.driver === 'NIL' || !t.driver ? 'NIL' : t.driver);
+  const kName = allDrivers.find(x => x.id === t.kelindan)?.name || (t.kelindan === 'NIL' || !t.kelindan ? 'NIL' : t.kelindan);
+  
+  if (dName === 'NIL' && kName === 'NIL') return 'Unassigned';
+  if (kName === 'NIL') return `${dName} (Dr)`;
+  if (dName === 'NIL') return `${kName} (Kel)`;
+  return `${dName} & ${kName}`;
+}
 
 function renderDriverToday() {
   const today=new Date().toISOString().split('T')[0];
@@ -966,7 +979,7 @@ function renderAdminDashboard() {
     const sc={pending:'amber',delivered:'green',undelivered:'red'}[t.status];
     html+=`<div class="card" style="margin-bottom:8px">
       <div style="display:flex;justify-content:space-between;align-items:center">
-        <div><div style="font-weight:700">${t.destination}</div><div style="font-size:12px;color:var(--muted)">${d.name} · ${t.area}</div></div>
+        <div><div style="font-weight:700">${t.destination}</div><div style="font-size:12px;color:var(--muted)">👥 ${getTeamName(t)} · ${t.area}</div></div>
         <span class="badge ${sc}">${t.status}</span>
       </div>
       ${t.photos&&t.photos.length?`<div class="photo-thumb-row">${t.photos.map(p=>`<img class="photo-thumb" src="${p}" onclick="openLightbox('${p}')">`).join('')}</div>`:''}
@@ -992,7 +1005,7 @@ function renderAdminSchedule() {
       <div style="display:flex;justify-content:space-between;align-items:flex-start">
         <div style="flex:1">
           <div style="font-weight:700;font-size:14px">${t.destination}</div>
-          <div style="font-size:12px;color:var(--muted);margin:2px 0">${fmt(t.date)} · ${d.name}</div>
+          <div style="font-size:12px;color:var(--muted);margin:2px 0">${fmt(t.date)} · 👥 ${getTeamName(t)}</div>
           <div style="font-size:12px;color:var(--accent);font-weight:500">${t.area}</div>
           ${t.mapLink?`<a class="map-btn" href="${t.mapLink}" target="_blank" style="margin-top:6px;display:inline-flex">🗺 Maps</a>`:''}
         </div>
@@ -1043,7 +1056,7 @@ function renderAdminFeedback() {
       <div class="proof-header">
         <div>
           <div class="proof-title">${t.destination}</div>
-          <div class="proof-meta">📅 ${fmt(t.date)} · 👤 ${d.name}</div>
+          <div class="proof-meta">📅 ${fmt(t.date)} · 👥 ${getTeamName(t)}</div>
           <div style="font-size:12px;color:var(--accent);margin-top:2px">${t.area}</div>
           ${t.undeliveredReason ? `<div style="font-size:12px;color:var(--red);margin-top:3px;font-weight:600">❌ ${t.undeliveredReason}</div>` : ''}
           ${rescheduleBadge}
@@ -1081,7 +1094,8 @@ function renderAdminDrivers() {
   
   allDrivers.forEach(d => {
     const isDriver = d.role === 'Driver';
-    const trips = allTrips.filter(t => t.driver === d.id);
+    // 确保 Driver 和 Kelindan 都能正确算到属于自己的趟数 KPI
+    const trips = allTrips.filter(t => t.driver === d.id || t.kelindan === d.id);
     const undelivered = trips.filter(t => t.status === 'undelivered').length;
     const complaints = trips.reduce((a, t) => a + (t.comments || []).filter(c => c.type === 'Customer Complaint' || c.type === 'Attitude Issue').length, 0);
     
@@ -1351,38 +1365,65 @@ function sendWANotification(driver,trip,comment){
 // ADD TRIP & EXCEL IMPORT (Admin)
 // ============================================================
 function openAddTrip() {
+  const drivers = allDrivers.filter(d => d.role === 'Driver');
+  const kelindans = allDrivers.filter(d => d.role === 'Kelindan');
+
   document.getElementById('add-trip-modal-content').innerHTML=`
     <div class="modal-title">Add Trip</div>
     <div class="modal-sub">Schedule a new delivery trip</div>
     <label>Date</label>
-    <input type="text" id="nt-date" placeholder="YYYY-MM-DD" value="${new Date().toISOString().split('T')[0]}"/>
-    <label>Driver</label>
-    <select id="nt-driver">${allDrivers.map(d=>`<option value="${d.id}">${d.name} (${d.role})</option>`).join('')}</select>
+    <input type="date" id="nt-date" value="${new Date().toISOString().split('T')[0]}" style="width:100%;padding:11px 14px;border:1.5px solid var(--border2);border-radius:var(--radius-sm);margin-bottom:1rem;font-family:var(--font);"/>
+    
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-bottom:10px">
+      <div>
+        <label>Driver</label>
+        <select id="nt-driver">
+          <option value="NIL">NIL (None)</option>
+          ${drivers.map(d=>`<option value="${d.id}">${d.name}</option>`).join('')}
+        </select>
+      </div>
+      <div>
+        <label>Kelindan</label>
+        <select id="nt-kelindan">
+          <option value="NIL">NIL (None)</option>
+          ${kelindans.map(d=>`<option value="${d.id}">${d.name}</option>`).join('')}
+        </select>
+      </div>
+    </div>
+
     <label>Destination</label>
     <input type="text" id="nt-dest" placeholder="e.g. Kluang"/>
     <label>Area / Route</label>
     <input type="text" id="nt-area" placeholder="e.g. 3-Kluang & Target x3"/>
-    <label>Google Maps Link</label>
+    <label>Google Maps Link (Optional)</label>
     <input type="text" id="nt-map" placeholder="http://maps..."/>
     <button class="btn" onclick="saveNewTrip()">Save Trip</button>`;
   document.getElementById('add-trip-modal').classList.add('open');
 }
 
 async function saveNewTrip() {
-  const date=document.getElementById('nt-date').value;
-  const driver=document.getElementById('nt-driver').value;
-  const dest=document.getElementById('nt-dest').value.trim();
-  const area=document.getElementById('nt-area').value.trim();
-  const mapLink=document.getElementById('nt-map').value.trim();
-  if(!date||!dest||!area){showToast('Fill required fields','error');return;}
-  const trip={date,driver,destination:dest,area,mapLink,notes:'',status:'pending',photos:[],undeliveredReason:'',deliveredAt:null,comments:[],rescheduleRequested:false,adminApproved:false,createdAt:new Date().toISOString()};
-  const ref=await db.collection('trips').add(trip);
+  const date = document.getElementById('nt-date').value;
+  const driver = document.getElementById('nt-driver').value;
+  const kelindan = document.getElementById('nt-kelindan').value;
+  const dest = document.getElementById('nt-dest').value.trim();
+  const area = document.getElementById('nt-area').value.trim();
+  const mapLink = document.getElementById('nt-map').value.trim();
+  
+  if(!date || !dest || !area){ showToast('Fill required fields','error'); return; }
+  if(driver === 'NIL' && kelindan === 'NIL'){ showToast('Must assign at least one person','error'); return; }
+  
+  const trip = { 
+    date, driver, kelindan, destination:dest, area, mapLink, notes:'', 
+    status:'pending', photos:[], undeliveredReason:'', deliveredAt:null, 
+    comments:[], rescheduleRequested:false, adminApproved:false, createdAt:new Date().toISOString() 
+  };
+  
+  const ref = await db.collection('trips').add(trip);
   allTrips.push({id:ref.id,...trip});
   document.getElementById('add-trip-modal').classList.remove('open');
   showToast('✅ Trip added','success');
   adminTab('schedule');
 }
-
 async function deleteTrip(id) {
   if(!confirm('Delete this trip?')) return;
   await db.collection('trips').doc(id).delete();
@@ -1456,7 +1497,8 @@ async function confirmExcelImport() {
     if(!row.Date || !row.Destination || !row.Area) continue; 
     const trip = {
       date: String(row.Date).split('T')[0],
-      driver: row.Driver ? String(row.Driver).toLowerCase() : 'jong',
+      driver: row.Driver ? String(row.Driver).toLowerCase() : 'NIL',
+      kelindan: row.Kelindan ? String(row.Kelindan).toLowerCase() : 'NIL',
       destination: String(row.Destination),
       area: String(row.Area),
       mapLink: row.MapLink ? String(row.MapLink) : '',
