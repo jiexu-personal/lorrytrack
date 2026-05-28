@@ -642,48 +642,70 @@ function renderDriverSchedule() {
 }
 
 function renderDriverKPI() {
-  const trips=myTrips();
-  const delivered=trips.filter(t=>t.status==='delivered').length;
-  const undelivered=trips.filter(t=>t.status==='undelivered').length;
-  const total=trips.length;
-  const complaints=trips.reduce((a,t)=>a+(t.comments||[]).filter(c=>c.type==='Customer Complaint').length,0);
-  const aMax=500,sMax=300,atMax=200,iMax=100;
-  const aScore=Math.max(0,aMax-undelivered*50);
-  const sScore=Math.max(0,sMax-undelivered*10);
-  const atScore=Math.max(0,atMax-complaints*50);
-  const iScore=iMax;
+  const trips = myTrips();
+  const delivered = trips.filter(t => t.status === 'delivered').length;
+  const undelivered = trips.filter(t => t.status === 'undelivered').length;
+  const total = trips.length;
+  // 抓取被标记为 Customer Complaint 或 Attitude Issue 的评论作为态度扣分依据
+  const complaints = trips.reduce((a, t) => a + (t.comments || []).filter(c => c.type === 'Customer Complaint' || c.type === 'Attitude Issue').length, 0);
   
-  // 新增：提取司机专属的手动加分/扣分
+  const isDriver = currentUser.role === 'Driver';
+  
+  // 1. 设定满分标准 (Driver / Kelindan)
+  const aMax = isDriver ? 500 : 300;
+  const sMax = isDriver ? 300 : 180;
+  const atMax = isDriver ? 200 : 120;
+  const iMax = isDriver ? 100 : 60;
+  const maxScore = isDriver ? 1100 : 660;
+
+  // 2. 获取 Admin 输入的具体次数 (若无则默认为 0)
+  const canceled = currentUser.canceledTrips || 0;
+  const extra = currentUser.extraTrips || 0;
+  const imageIss = currentUser.imageIssues || 0;
   const manualPoints = currentUser.manualPoints || 0;
-  
-  // 将 manualPoints 加进总分
+
+  // 3. 计算各个维度的分数 (最低不扣到负数)
+  // Attendance: cancel扣 50/30, local extra加 30/18
+  const aScore = Math.max(0, aMax - (canceled * (isDriver ? 50 : 30)) + (extra * (isDriver ? 30 : 18)));
+  // Shop Undelivery: 扣 10/6 per shop
+  const sScore = Math.max(0, sMax - (undelivered * (isDriver ? 10 : 6)));
+  // Attitude: 扣 50/30 per complaint
+  const atScore = Math.max(0, atMax - (complaints * (isDriver ? 50 : 30)));
+  // Image: 扣 10/6 per issue
+  const iScore = Math.max(0, iMax - (imageIss * (isDriver ? 10 : 6)));
+
   const total_score = aScore + sScore + atScore + iScore + manualPoints;
-  const maxScore = currentUser.role === 'Driver' ? 1100 : 660; // 根据身份定满分
+  const pct = Math.min(100, Math.max(0, (total_score / maxScore * 100))).toFixed(0);
+  const color = total_score > (maxScore*0.75) ? 'var(--green)' : total_score > (maxScore*0.5) ? 'var(--amber)' : 'var(--red)';
 
   return `
   <div class="section-hdr">My KPI Score</div>
   <div class="card highlight" style="text-align:center;padding:1.75rem">
-    <div style="font-size:52px;font-weight:700;letter-spacing:-2px;color:${total_score>800?'var(--green)':total_score>500?'var(--amber)':'var(--red)'}">${total_score}</div>
+    <div style="font-size:52px;font-weight:700;letter-spacing:-2px;color:${color}">${total_score}</div>
     <div style="color:var(--muted);font-size:13px;font-weight:500">out of ${maxScore} points</div>
-    <div class="kpi-bar" style="margin-top:14px"><div class="kpi-bar-fill" style="width:${Math.min(100, Math.max(0, (total_score/maxScore*100))).toFixed(0)}%;background:${total_score>800?'var(--green)':total_score>500?'var(--amber)':'var(--red)'}"></div></div>
+    <div class="kpi-bar" style="margin-top:14px"><div class="kpi-bar-fill" style="width:${pct}%;background:${color}"></div></div>
   </div>
   <div class="kpi-grid">
-    ${kpiCard('Attendance',aScore,aMax)}${kpiCard('Shop Delivery',sScore,sMax)}
-    ${kpiCard('Attitude',atScore,atMax)}${kpiCard('Image',iScore,iMax)}
+    ${kpiCard('Attendance', aScore, aMax)}
+    ${kpiCard('Shop Delivery', sScore, sMax)}
+    ${kpiCard('Attitude', atScore, atMax)}
+    ${kpiCard('Image', iScore, iMax)}
   </div>
-  <div class="section-hdr">Trip Stats & Adjustments</div>
+  <div class="section-hdr">Trip Stats & Admin Records</div>
   <div class="card">
-    ${statRow('Total Trips',total)}
-    ${statRow('Delivered',delivered,'green')}
-    ${statRow('Not Delivered',undelivered,'red')}
-    ${statRow('Complaints',complaints,complaints>0?'red':'green')}
+    ${statRow('Total Trips', total)}
+    ${statRow('Not Delivered (-)', undelivered, 'red')}
+    ${statRow('Complaints (-)', complaints, complaints > 0 ? 'red' : 'green')}
+    ${statRow('Canceled Trips (-)', canceled, canceled > 0 ? 'red' : 'text')}
+    ${statRow('Extra Trips (+)', extra, extra > 0 ? 'green' : 'text')}
+    ${statRow('Image Issues (-)', imageIss, imageIss > 0 ? 'red' : 'text')}
     <div style="display:flex;justify-content:space-between;padding:8px 0;border-top:1px solid var(--border);margin-top:4px;font-size:13px">
-      <span style="color:var(--text);font-weight:600">Admin Adjustments</span>
-      <strong style="color:${manualPoints>=0?'var(--green)':'var(--red)'}">${manualPoints > 0 ? '+'+manualPoints : manualPoints} pts</strong>
+      <span style="color:var(--text);font-weight:600">Other Adjustments</span>
+      <strong style="color:${manualPoints >= 0 ? 'var(--green)' : 'var(--red)'}">${manualPoints > 0 ? '+' + manualPoints : manualPoints} pts</strong>
     </div>
   </div>`;
 }
-
+  
 function renderDriverHistory() {
   const trips=myTrips().filter(t=>t.status!=='pending').sort((a,b)=>b.date.localeCompare(a.date));
   let html=`<div class="section-hdr">Delivery History</div>`;
@@ -1057,21 +1079,34 @@ function renderAdminDrivers() {
     <button class="btn small" onclick="openAddDriver()">+ Add Driver</button>
   </div>`;
   
-  allDrivers.forEach(d=>{
-    const trips=allTrips.filter(t=>t.driver===d.id);
-    const delivered=trips.filter(t=>t.status==='delivered').length;
-    const undelivered=trips.filter(t=>t.status==='undelivered').length;
-    const complaints=trips.reduce((a,t)=>a+(t.comments||[]).filter(c=>c.type==='Customer Complaint').length,0);
+  allDrivers.forEach(d => {
+    const isDriver = d.role === 'Driver';
+    const trips = allTrips.filter(t => t.driver === d.id);
+    const undelivered = trips.filter(t => t.status === 'undelivered').length;
+    const complaints = trips.reduce((a, t) => a + (t.comments || []).filter(c => c.type === 'Customer Complaint' || c.type === 'Attitude Issue').length, 0);
     
-    // NEW: 读取 Admin 手动加减的分数，默认 0
+    const aMax = isDriver ? 500 : 300;
+    const sMax = isDriver ? 300 : 180;
+    const atMax = isDriver ? 200 : 120;
+    const iMax = isDriver ? 100 : 60;
+    const maxScore = isDriver ? 1100 : 660;
+
+    const canceled = d.canceledTrips || 0;
+    const extra = d.extraTrips || 0;
+    const imageIss = d.imageIssues || 0;
     const manualPoints = d.manualPoints || 0;
 
-    const maxScore=d.role==='Driver'?1100:660;
-    // 总分 = 自动计算满分 - 扣除项 + Admin手动调整分
-    const score=Math.max(0, maxScore - undelivered*50 - complaints*50) + manualPoints;
-    const pct=Math.min(100, Math.max(0, (score/maxScore*100))).toFixed(0);
+    const aScore = Math.max(0, aMax - (canceled * (isDriver ? 50 : 30)) + (extra * (isDriver ? 30 : 18)));
+    const sScore = Math.max(0, sMax - (undelivered * (isDriver ? 10 : 6)));
+    const atScore = Math.max(0, atMax - (complaints * (isDriver ? 50 : 30)));
+    const iScore = Math.max(0, iMax - (imageIss * (isDriver ? 10 : 6)));
 
-    html+=`<div class="card" style="margin-bottom:10px">
+    const score = aScore + sScore + atScore + iScore + manualPoints;
+    const pct = Math.min(100, Math.max(0, (score / maxScore * 100))).toFixed(0);
+    const colorClass = score > (maxScore*0.75) ? 'green' : score > (maxScore*0.5) ? 'amber' : 'red';
+    const colorHex = score > (maxScore*0.75) ? 'var(--green)' : score > (maxScore*0.5) ? 'var(--amber)' : 'var(--red)';
+
+    html += `<div class="card" style="margin-bottom:10px">
       <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:10px">
         <div style="display:flex;align-items:center;gap:10px">
           <div class="driver-avatar">${d.name.slice(0,2).toUpperCase()}</div>
@@ -1080,11 +1115,11 @@ function renderAdminDrivers() {
             <div style="font-size:11px;color:var(--muted);font-family:var(--mono)">${d.role} · ${d.lorry||'—'}</div>
           </div>
         </div>
-        <span class="badge ${score>800?'green':score>500?'amber':'red'}">${score} pts</span>
+        <span class="badge ${colorClass}">${score} / ${maxScore}</span>
       </div>
-      <div class="kpi-bar"><div class="kpi-bar-fill" style="width:${pct}%;background:${score>800?'var(--green)':score>500?'var(--amber)':'var(--red)'}"></div></div>
+      <div class="kpi-bar"><div class="kpi-bar-fill" style="width:${pct}%;background:${colorHex}"></div></div>
       <div style="margin-top:10px;display:flex;justify-content:space-between;align-items:center">
-        <span style="font-size:12px;color:var(--muted)">Adjustments: <strong style="color:${manualPoints>=0?'var(--green)':'var(--red)'}">${manualPoints}</strong></span>
+        <span style="font-size:12px;color:var(--muted)">Adjustments: <strong style="color:var(--accent)">${canceled + extra + imageIss > 0 ? 'Yes' : 'None'}</strong></span>
         <div>
           <button class="btn amber-btn small" onclick="openEditKPI('${d.id}')">📊 Edit KPI</button>
           <button class="btn danger small" onclick="removeDriver('${d.id}')">Remove</button>
@@ -1100,32 +1135,52 @@ function renderAdminDrivers() {
 // ============================================================
 function openEditKPI(driverId) {
   const d = allDrivers.find(x => x.id === driverId);
-  const currentManual = d.manualPoints || 0;
-  document.getElementById('edit-kpi-modal-content').innerHTML = `
-    <div class="modal-title">📊 Edit KPI: ${d.name}</div>
-    <div class="modal-sub">Manually add or deduct points (e.g., 50 for bonus, -20 for penalty).</div>
-    
-    <div style="margin-bottom:14px;font-size:13px;background:var(--surface2);padding:10px;border-radius:8px">
-      Current Manual Adjustments: <strong style="color:var(--accent)">${currentManual > 0 ? '+'+currentManual : currentManual} pts</strong>
-    </div>
+  const isDriver = d.role === 'Driver';
+  
+  const canceled = d.canceledTrips || 0;
+  const extra = d.extraTrips || 0;
+  const imageIss = d.imageIssues || 0;
+  const manual = d.manualPoints || 0;
 
-    <label>Add / Deduct Points (Number)</label>
-    <input type="number" id="kpi-adj-val" placeholder="e.g. 50 or -30"/>
+  document.getElementById('edit-kpi-modal-content').innerHTML = `
+    <div class="modal-title">📊 Evaluate KPI: ${d.name}</div>
+    <div class="modal-sub">Role: <strong style="color:var(--accent)">${d.role}</strong>. Update infractions/bonuses.</div>
     
-    <label>Reason (Optional)</label>
-    <input type="text" id="kpi-adj-reason" placeholder="e.g. Extra trip bonus / Late penalty"/>
-    
-    <button class="btn" onclick="saveKPIAdjustment('${d.id}')">Save Adjustment</button>`;
+    <div style="display:grid;grid-template-columns:1fr 1fr;gap:12px;margin-bottom:16px">
+      <div>
+        <label>Cancel Trip (Times)</label>
+        <span style="font-size:10px;color:var(--red)">-${isDriver?50:30} pts/time</span>
+        <input type="number" id="kpi-cancel" value="${canceled}" min="0"/>
+      </div>
+      <div>
+        <label>Local Extra (Times)</label>
+        <span style="font-size:10px;color:var(--green)">+${isDriver?30:18} pts/time</span>
+        <input type="number" id="kpi-extra" value="${extra}" min="0"/>
+      </div>
+      <div>
+        <label>Image Issue (Times)</label>
+        <span style="font-size:10px;color:var(--red)">-${isDriver?10:6} pts/time</span>
+        <input type="number" id="kpi-image" value="${imageIss}" min="0"/>
+      </div>
+      <div>
+        <label>Other Adjust (Points)</label>
+        <span style="font-size:10px;color:var(--muted)">Direct +- score</span>
+        <input type="number" id="kpi-manual" value="${manual}"/>
+      </div>
+    </div>
+    <div style="font-size:12px;color:var(--muted);background:var(--surface2);padding:10px;border-radius:8px;margin-bottom:14px">
+      * <strong>Undelivered</strong> (-${isDriver?10:6}/shop) & <strong>Attitude</strong> (-${isDriver?50:30}/complaint) are auto-calculated from trip data.
+    </div>
+    <button class="btn" onclick="saveKPIAdjustment('${d.id}')">Save KPI Data</button>`;
   
   document.getElementById('edit-kpi-modal').classList.add('open');
 }
 
 async function saveKPIAdjustment(driverId) {
-  const val = parseInt(document.getElementById('kpi-adj-val').value) || 0;
-  if(val === 0) { 
-    showToast('Enter a valid number', 'error'); 
-    return; 
-  }
+  const canceled = parseInt(document.getElementById('kpi-cancel').value) || 0;
+  const extra = parseInt(document.getElementById('kpi-extra').value) || 0;
+  const imageIss = parseInt(document.getElementById('kpi-image').value) || 0;
+  const manual = parseInt(document.getElementById('kpi-manual').value) || 0;
   
   const btn = event.target; 
   btn.disabled = true; 
@@ -1133,24 +1188,30 @@ async function saveKPIAdjustment(driverId) {
   
   try {
     const d = allDrivers.find(x => x.id === driverId);
-    // 叠加分数 (原本的分数 + 新输入的分数)
-    const newTotal = (d.manualPoints || 0) + val;
     
     // 存入 Firebase
-    await db.collection('drivers').doc(driverId).update({ manualPoints: newTotal });
+    await db.collection('drivers').doc(driverId).update({ 
+      canceledTrips: canceled,
+      extraTrips: extra,
+      imageIssues: imageIss,
+      manualPoints: manual 
+    });
     
     // 更新本地 Array 数据
-    d.manualPoints = newTotal;
+    d.canceledTrips = canceled;
+    d.extraTrips = extra;
+    d.imageIssues = imageIss;
+    d.manualPoints = manual;
     
     document.getElementById('edit-kpi-modal').classList.remove('open');
-    showToast(`✅ KPI adjusted by ${val > 0 ? '+'+val : val} points!`, 'success');
+    showToast(`✅ KPI updated successfully!`, 'success');
     
     // 刷新页面
     adminTab('drivers');
   } catch(e) {
     showToast('Error: ' + e.message, 'error');
     btn.disabled = false;
-    btn.textContent = 'Save Adjustment';
+    btn.textContent = 'Save KPI Data';
   }
 }
 
@@ -1202,7 +1263,7 @@ async function saveNewDriver() {
       btn.textContent = 'Save Driver';
       return;
     }
-    const newDriver = { id, name, role, lorry, partner: '', phone: '', password, manualPoints: 0 };
+    const newDriver = { id, name, role, lorry, partner: '', phone: '', password, manualPoints: 0, canceledTrips: 0, extraTrips: 0, imageIssues: 0 };
     await db.collection('drivers').doc(id).set(newDriver);
     allDrivers.push(newDriver);
 
