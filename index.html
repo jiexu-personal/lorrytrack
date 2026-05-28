@@ -837,15 +837,39 @@ async function requestReschedule(tripId) {
   showToast('📩 Reschedule request sent!','success');
 }
 
+// ============================================================
+// Google Drive 专用上传通道 (Google Apps Script)
+// ============================================================
 async function uploadPhoto(dataUrl, tripId) {
-  try{
-    const blob=dataURItoBlob(dataUrl);
-    const ref=storage.ref(`delivery_photos/${tripId}_${Date.now()}.jpg`);
-    await ref.put(blob);
-    return await ref.getDownloadURL();
-  }catch(e){
-    console.warn('Storage upload failed, using base64 fallback',e);
-    return dataUrl; 
+  // 👇 把第三步拿到的 Web app URL 贴在这里
+  const GAS_URL = "https://script.google.com/macros/s/AKfycbwN4XBXXLlNgOJARUJsayXHJsqIhcC02bvVzPfwdq3TddrAC4_6LO8v68QOuW7mNxUS/exec"; 
+  
+  const filename = `${tripId}_${Date.now()}.jpg`;
+
+  // 使用 URLSearchParams 发送，避免跨域报错
+  const formData = new URLSearchParams();
+  formData.append("fileData", dataUrl);
+  formData.append("filename", filename);
+
+  try {
+    const res = await fetch(GAS_URL, {
+      method: "POST",
+      body: formData,
+      headers: {
+        "Content-Type": "application/x-www-form-urlencoded",
+      }
+    });
+    
+    const data = await res.json();
+    if (data.success) {
+      return data.url; // 返回 Google Drive 的图片链接
+    } else {
+      throw new Error(data.error);
+    }
+  } catch (e) {
+    console.error("Google Drive 上传失败", e);
+    showToast("Photo upload failed: " + e.message, "error");
+    return null; 
   }
 }
 
