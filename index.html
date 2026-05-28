@@ -36,11 +36,6 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .spinner{width:40px;height:40px;border:3px solid var(--border2);border-top-color:var(--accent);border-radius:50%;animation:spin .8s linear infinite}
 @keyframes spin{to{transform:rotate(360deg)}}
 
-/* FIREBASE CONFIG SCREEN */
-#fb-config-screen{position:fixed;inset:0;background:var(--bg);z-index:8888;display:none;align-items:center;justify-content:center;padding:1.5rem;flex-direction:column}
-#fb-config-screen.show{display:flex}
-.config-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:2rem 1.75rem;width:100%;max-width:500px;box-shadow:var(--shadow-lg)}
-
 /* LOGIN */
 #login{align-items:center;justify-content:center;padding:1.5rem;background:linear-gradient(135deg,#eef2ff 0%,#f0f9ff 50%,#faf5ff 100%)}
 .login-card{background:var(--surface);border:1px solid var(--border);border-radius:20px;padding:2.5rem 1.75rem;width:100%;max-width:380px;box-shadow:var(--shadow-lg)}
@@ -214,25 +209,6 @@ select option{background:var(--surface)}
   <div style="font-size:13px;color:var(--muted);font-family:var(--mono)">Connecting to database...</div>
 </div>
 
-<div id="fb-config-screen">
-  <div class="config-card">
-    <div style="font-size:24px;margin-bottom:8px">🔥</div>
-    <div style="font-size:18px;font-weight:700;margin-bottom:6px">Firebase Setup</div>
-    <div style="font-size:13px;color:var(--muted);margin-bottom:20px">Paste your Firebase project config below. See setup guide for instructions.</div>
-    <label>Firebase Config JSON</label>
-    <textarea id="fb-config-input" style="font-family:var(--mono);font-size:12px;min-height:160px" placeholder='{"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."}'></textarea>
-    <button class="btn" onclick="applyFirebaseConfig()">Connect to Firebase</button>
-    <div style="margin-top:14px;background:var(--surface2);border-radius:10px;padding:12px;font-size:12px;color:var(--muted);line-height:1.8">
-      <strong style="color:var(--text)">Quick setup:</strong><br>
-      1. Go to console.firebase.google.com<br>
-      2. Create project → Add web app<br>
-      3. Copy the firebaseConfig object<br>
-      4. Enable Firestore + Storage<br>
-      5. Set Rules to allow read/write (test mode)
-    </div>
-  </div>
-</div>
-
 <div class="toast" id="toast"></div>
 
 <div class="lightbox" id="lightbox" onclick="closeLightbox()">
@@ -402,12 +378,12 @@ function closeLightbox() {
 }
 
 // ============================================================
-// FIREBASE INIT
+// FIREBASE INIT (HARDCODED CONFIG)
 // ============================================================
 const WA_NOTIFY = '+60187811293';
 let db, storage, firebaseReady = false;
 
-// 🔥 直接把你的 Firebase 配置硬编码在这里
+// 你的专属 Config 已经写死在这里了！
 const firebaseConfig = {
   apiKey: "AIzaSyB5p2x1uUiAUrhPYzsBR7Be-aadcV1fM9M",
   authDomain: "lorrytrack-d8aec.firebaseapp.com",
@@ -419,10 +395,9 @@ const firebaseConfig = {
 
 async function initFirebase() {
   try {
-    // 使用上方写死的 config 初始化
     if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
     
-    // 开启本地缓存，提升载入速度与离线体验
+    // 开启本地缓存
     try {
       await firebase.firestore().enablePersistence();
     } catch (err) {
@@ -431,27 +406,48 @@ async function initFirebase() {
 
     db = firebase.firestore();
     storage = firebase.storage();
-    
-    // 测试连接
     await db.collection('_ping').doc('test').set({t: Date.now()});
     firebaseReady = true;
     await seedInitialData();
     
-    // 关掉加载动画
-    document.getElementById('app-loading').style.display = 'none';
-    
-    // 确保绝对不会显示那个 Firebase Setup 弹窗
-    const setupScreen = document.getElementById('fb-config-screen');
-    if (setupScreen) setupScreen.style.display = 'none'; 
-    
-    // 直接进入登录界面
+    document.getElementById('app-loading').style.display='none';
     showScreen('login');
   } catch(e) {
     console.error(e);
-    document.getElementById('app-loading').style.display = 'none';
-    showToast('Firebase connection failed: ' + e.message, 'error');
+    document.getElementById('app-loading').style.display='none';
+    showToast('Firebase connection failed: '+e.message,'error');
   }
 }
+
+async function seedInitialData() {
+  const snap = await db.collection('drivers').limit(1).get();
+  if (!snap.empty) return;
+  const batch = db.batch();
+  const defaultDrivers = [
+    {id:'jong',name:'Jong',role:'Driver',lorry:'JUF-01',partner:'Namye',phone:'',password:'jong123'},
+    {id:'anne',name:'Anne',role:'Driver',lorry:'ALY-01',partner:'',phone:'',password:'anne123'},
+    {id:'khairil',name:'Khairil',role:'Driver',lorry:'JUB-01',partner:'',phone:'',password:'khairil123'},
+    {id:'shukri',name:'Shukri',role:'Driver',lorry:'SYS-01',partner:'',phone:'',password:'shukri123'},
+    {id:'grace',name:'Grace',role:'Driver',lorry:'JNE-01',partner:'Namye',phone:'',password:'grace123'},
+    {id:'karen',name:'Karen',role:'Driver',lorry:'JTU-01',partner:'',phone:'',password:'karen123'},
+    {id:'walhub',name:'Walhub',role:'Kelindan',lorry:'JNE-01',partner:'',phone:'',password:'walhub123'},
+    {id:'namye',name:'Namye',role:'Kelindan',lorry:'JUF-01',partner:'',phone:'',password:'namye123'},
+  ];
+  defaultDrivers.forEach(d=>{ batch.set(db.collection('drivers').doc(d.id), d); });
+  
+  const today = new Date().toISOString().split('T')[0];
+  const tomorrow = new Date(Date.now()+86400000).toISOString().split('T')[0];
+  const sampleTrips = [
+    {date:today, driver:'jong', area:'99 Gambang', destination:'Gambang', mapLink:'http://googleusercontent.com/maps.google.com/6', status:'pending', adminApproved:false, createdAt:new Date().toISOString()},
+    {date:today, driver:'anne', area:'1-N9 Negeri Sembilan', destination:'N9 Area', mapLink:'http://googleusercontent.com/maps.google.com/7', status:'pending', adminApproved:false, createdAt:new Date().toISOString()},
+    {date:tomorrow, driver:'jong', area:'1-Mersing', destination:'Mersing', mapLink:'', status:'pending', adminApproved:false, createdAt:new Date().toISOString()},
+  ];
+  for(const t of sampleTrips){
+    batch.set(db.collection('trips').doc('t_'+Date.now()+'_'+Math.random().toString(36).slice(2)), t);
+  }
+  await batch.commit();
+}
+
 // ============================================================
 // AUTH
 // ============================================================
