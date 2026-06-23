@@ -835,7 +835,8 @@ async function confirmDelivered() {
   try{
     const trip = allTrips.find(t => t.id === currentTripId); 
     const photoURL = await uploadPhoto(uploadedPhotoData, trip); 
-    if (!photoURL) throw new Error("Photo upload returned null");
+    
+    if (!photoURL) throw new Error("无法获取图片链接，请重试");
 
     const update={status:'delivered',photos:firebase.firestore.FieldValue.arrayUnion(photoURL),deliveredAt:new Date().toISOString(), adminApproved:false};
     await db.collection('trips').doc(currentTripId).update(update);
@@ -845,7 +846,10 @@ async function confirmDelivered() {
     closeDeliveryModal();
     showToast('✅ Delivery confirmed!','success');
     driverTab(currentDriverTab);
-  }catch(e){showToast('Error: '+e.message,'error');}
+  }catch(e){
+    // 现在这里会显示真正的错误原因了
+    showToast('Upload Error: '+e.message,'error');
+  }
   btn.disabled=false; btn.textContent='✅ Delivered';
 }
 
@@ -877,7 +881,7 @@ async function confirmUndelivered() {
   try{
     const trip = allTrips.find(t => t.id === currentTripId); 
     const photoURL = await uploadPhoto(uploadedPhotoData, trip); 
-    if (!photoURL) throw new Error("Photo upload returned null");
+    if (!photoURL) throw new Error("无法获取图片链接，请重试");
 
     const notes=document.getElementById('reason-notes').value;
     const update={status:'undelivered',undeliveredReason:selectedReason,notes,photos:firebase.firestore.FieldValue.arrayUnion(photoURL),rescheduleRequested:false, adminApproved:false};
@@ -888,7 +892,10 @@ async function confirmUndelivered() {
     closeDeliveryModal();
     showToast('Marked as not delivered','error');
     driverTab(currentDriverTab);
-  }catch(e){showToast('Error: '+e.message,'error');}
+  }catch(e){
+    // 未送达这里也加上了同样的报错显示逻辑
+    showToast('Upload Error: '+e.message,'error');
+  }
   btn.disabled=false;
 }
 
@@ -918,20 +925,27 @@ async function uploadPhoto(dataUrl, trip) {
   try {
     const res = await fetch(GAS_URL, {
       method: "POST",
-      body: formData,
-      headers: { "Content-Type": "application/x-www-form-urlencoded" }
+      body: formData
     });
     
-    const data = await res.json();
-    if (data.success) {
-      return data.url; 
-    } else {
-      throw new Error(data.error);
+    // 先转成 text，避免后台返回 HTML 导致 JSON.parse 崩溃
+    const textData = await res.text();
+    
+    try {
+      const data = JSON.parse(textData);
+      if (data.success) {
+        return data.url; 
+      } else {
+        throw new Error(data.error || "GAS 内部处理报错");
+      }
+    } catch (e) {
+      console.error("后台返回了非JSON内容:", textData);
+      throw new Error("后台未返回JSON，请检查GAS部署权限是否设为'Anyone'");
     }
   } catch (e) {
-    console.error("Google Drive 上传失败", e);
-    showToast("Photo upload failed: " + e.message, "error");
-    return null; 
+    console.error("上传流程报错", e);
+    // 直接抛出错误，把真正的原因传给外层函数
+    throw new Error(e.message); 
   }
 }
 
