@@ -847,7 +847,6 @@ async function confirmDelivered() {
     showToast('✅ Delivery confirmed!','success');
     driverTab(currentDriverTab);
   }catch(e){
-    // 现在这里会显示真正的错误原因了
     showToast('Upload Error: '+e.message,'error');
   }
   btn.disabled=false; btn.textContent='✅ Delivered';
@@ -893,7 +892,6 @@ async function confirmUndelivered() {
     showToast('Marked as not delivered','error');
     driverTab(currentDriverTab);
   }catch(e){
-    // 未送达这里也加上了同样的报错显示逻辑
     showToast('Upload Error: '+e.message,'error');
   }
   btn.disabled=false;
@@ -911,8 +909,8 @@ async function requestReschedule(tripId) {
 // Google Drive 专用上传通道 (Google Apps Script)
 // ============================================================
 async function uploadPhoto(dataUrl, trip) {
-  // 👇 替换成了你提供的全新链接
-  const GAS_URL = "https://script.google.com/macros/s/AKfycbxhPa5G1IzLlRO7W8iPovp3ACJfKJ30ta1eTPoK_g0tZLuXeGGLKa10fzNIsWGTP2GQ/exec"; 
+  // 👇 已经替换成了你最新提供的安全防崩版 GAS 链接
+  const GAS_URL = "https://script.google.com/macros/s/AKfycbxRiUta3jm6_l3U2HB4iHOseV19BHcdzyn1jCwyPtIFUn_M2dTxlMhW1MK4l-IdAQ9jsw/exec"; 
   
   const filename = `${trip.id}_${Date.now()}.jpg`;
 
