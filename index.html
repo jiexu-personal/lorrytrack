@@ -377,8 +377,21 @@ function showToast(msg, type='success') {
   setTimeout(()=>t.classList.remove('show'), 3000);
 }
 
+// 专门处理苹果 Safari 浏览器对 Google Drive 链接的屏蔽限制
+function getSafeImgSrc(url) {
+  if(!url) return '';
+  // 拦截 Google Drive 的下载/预览链接，强行转换成缩略图链接以防苹果手机屏蔽
+  if(url.includes('drive.google.com/uc')) {
+    const idMatch = url.match(/[?&]id=([^&]+)/);
+    if(idMatch && idMatch[1]) {
+      return `https://drive.google.com/thumbnail?id=${idMatch[1]}&sz=w800`;
+    }
+  }
+  return url;
+}
+
 function openLightbox(src) {
-  document.getElementById('lightbox-img').src = src;
+  document.getElementById('lightbox-img').src = getSafeImgSrc(src);
   document.getElementById('lightbox').classList.add('open');
 }
 function closeLightbox() {
@@ -746,7 +759,8 @@ function renderDeliveryModal(trip) {
 
   let photoHtml='';
   if(trip.photos&&trip.photos.length){
-    photoHtml=`<div class="photo-thumb-row">${trip.photos.map(p=>`<img class="photo-thumb" src="${p}" onclick="openLightbox('${p}')">`).join('')}</div>`;
+    // 使用 getSafeImgSrc 函数把图片转换为苹果支持的安全格式
+    photoHtml=`<div class="photo-thumb-row">${trip.photos.map(p=>`<img class="photo-thumb" src="${getSafeImgSrc(p)}" onclick="openLightbox('${p}')">`).join('')}</div>`;
   }
 
   let actionHtml='';
@@ -909,7 +923,6 @@ async function requestReschedule(tripId) {
 // Google Drive 专用上传通道 (Google Apps Script)
 // ============================================================
 async function uploadPhoto(dataUrl, trip) {
-  // 👇 已经替换成了你最新提供的安全防崩版 GAS 链接
   const GAS_URL = "https://script.google.com/macros/s/AKfycbxRiUta3jm6_l3U2HB4iHOseV19BHcdzyn1jCwyPtIFUn_M2dTxlMhW1MK4l-IdAQ9jsw/exec"; 
   
   const filename = `${trip.id}_${Date.now()}.jpg`;
@@ -994,7 +1007,7 @@ function renderAdminDashboard() {
         <div><div style="font-weight:700">${t.destination}</div><div style="font-size:12px;color:var(--muted)">👥 ${getTeamName(t)} · ${t.area}</div></div>
         <span class="badge ${sc}">${t.status}</span>
       </div>
-      ${t.photos&&t.photos.length?`<div class="photo-thumb-row">${t.photos.map(p=>`<img class="photo-thumb" src="${p}" onclick="openLightbox('${p}')">`).join('')}</div>`:''}
+      ${t.photos&&t.photos.length?`<div class="photo-thumb-row">${t.photos.map(p=>`<img class="photo-thumb" src="${getSafeImgSrc(p)}" onclick="openLightbox('${p}')">`).join('')}</div>`:''}
     </div>`;
   });
   return html;
@@ -1026,7 +1039,7 @@ function renderAdminSchedule() {
           <button class="btn danger small" onclick="deleteTrip('${t.id}')">Delete</button>
         </div>
       </div>
-      ${t.photos&&t.photos.length?`<div class="photo-thumb-row">${t.photos.map(p=>`<img class="photo-thumb" src="${p}" onclick="openLightbox('${p}')">`).join('')}</div>`:''}
+      ${t.photos&&t.photos.length?`<div class="photo-thumb-row">${t.photos.map(p=>`<img class="photo-thumb" src="${getSafeImgSrc(p)}" onclick="openLightbox('${p}')">`).join('')}</div>`:''}
     </div>`;
   });
   return html;
@@ -1050,7 +1063,7 @@ function renderAdminFeedback() {
 
     let photosHtml = '';
     if(t.photos && t.photos.length){
-      photosHtml = `<div class="proof-photos">${t.photos.map(p => `<img class="proof-photo" src="${p}" onclick="openLightbox('${p}')">`).join('')}</div>`;
+      photosHtml = `<div class="proof-photos">${t.photos.map(p => `<img class="proof-photo" src="${getSafeImgSrc(p)}" onclick="openLightbox('${p}')">`).join('')}</div>`;
     } else {
       photosHtml = `<div style="font-size:12px;color:var(--muted);padding:4px 0">📷 No delivery proof photo</div>`;
     }
